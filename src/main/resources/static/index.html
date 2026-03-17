@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Ressarcimento ICMS-ST – SEFAZ/AM</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            max-width: 640px;
+            margin: 2rem auto;
+            padding: 0 1.5rem;
+            line-height: 1.5;
+            color: #333;
+            background: #f8f9fa;
+        }
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+            color: #1a1a1a;
+        }
+        p {
+            margin: 0 0 1rem;
+            color: #555;
+        }
+        ul {
+            list-style: none;
+            padding: 0;
+            margin: 1.5rem 0;
+        }
+        li {
+            margin-bottom: 0.5rem;
+        }
+        a {
+            color: #0d6efd;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        code {
+            font-size: 0.9em;
+            background: #e9ecef;
+            padding: 0.15em 0.4em;
+            border-radius: 4px;
+        }
+        h2 {
+            font-size: 1.1rem;
+            margin: 1.5rem 0 0.75rem;
+            color: #1a1a1a;
+        }
+        .endpoint {
+            margin-bottom: 0.6rem;
+        }
+        .method {
+            display: inline-block;
+            min-width: 3.2em;
+            font-weight: 600;
+        }
+        .method.get { color: #0d6efd; }
+        .method.post { color: #198754; }
+    </style>
+</head>
+<body>
+    <h1>Sistema de Ressarcimento ICMS-ST – SEFAZ/AM</h1>
+    <p>API REST para geração de XMLs de ressarcimento de ICMS por substituição tributária (produtos e pedidos), conforme manual da SEFAZ/AM e envio via DT-e.</p>
+
+    <h2>Declarante</h2>
+    <ul>
+        <li class="endpoint"><span class="method post">POST</span> <code>/api/declarante</code> – Cadastrar ou atualizar dados do declarante (body JSON)</li>
+        <li class="endpoint"><span class="method get">GET</span> <a href="/api/declarante"><code>/api/declarante</code></a> – Consultar dados do declarante</li>
+    </ul>
+
+    <h2>Produtos (MATRI-NAC)</h2>
+    <ul>
+        <li class="endpoint"><span class="method post">POST</span> <code>/api/produtos/importar</code> – Upload da planilha de produtos (multipart/form-data, campo <code>arquivo</code>)</li>
+        <li class="endpoint"><span class="method get">GET</span> <a href="/api/produtos"><code>/api/produtos</code></a> – Listar produtos (query opcional: <code>codigo</code>, <code>descricao</code>, <code>page</code>, <code>size</code>)</li>
+        <li class="endpoint"><span class="method post">POST</span> <code>/api/produtos/gerar-xml</code> – Gerar XML enviProdutoRessarcimento e retornar para download</li>
+        <li class="endpoint"><span class="method get">GET</span> <a href="/api/produtos/historico"><code>/api/produtos/historico</code></a> – Listar histórico de arquivos de produtos gerados</li>
+        <li class="endpoint"><span class="method get">GET</span> <code>/api/produtos/historico/{id}/download</code> – Download do XML de produtos pelo ID do histórico</li>
+    </ul>
+
+    <h2>Pedidos (versão 2.00)</h2>
+    <ul>
+        <li class="endpoint"><span class="method post">POST</span> <code>/api/pedidos/importar</code> – Upload da planilha de operações de saída (multipart/form-data, campo <code>arquivo</code>)</li>
+        <li class="endpoint"><span class="method get">GET</span> <a href="/api/pedidos"><code>/api/pedidos</code></a> – Listar operações/notas de saída (query opcional: <code>ano</code>, <code>mes</code>, <code>page</code>, <code>size</code>)</li>
+        <li class="endpoint"><span class="method post">POST</span> <code>/api/pedidos/gerar-xml</code> – Gerar XML enviOperacaoRessarcimento (query obrigatória: <code>ano</code>, <code>mes</code>)</li>
+        <li class="endpoint"><span class="method get">GET</span> <a href="/api/pedidos/historico"><code>/api/pedidos/historico</code></a> – Listar histórico de arquivos de pedidos gerados</li>
+        <li class="endpoint"><span class="method get">GET</span> <code>/api/pedidos/historico/{id}/download</code> – Download do XML de pedidos pelo ID do histórico</li>
+    </ul>
+</body>
+</html>
