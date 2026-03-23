@@ -10,3 +10,10 @@ spring:
       ddl-auto: create-drop
   flyway:
     enabled: false
+
+# Desabilita Swagger nos testes para acelerar o contexto
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

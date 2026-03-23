@@ -1,8 +1,13 @@
 package br.com.empresa.ressarcimento.produtos;
 
 import br.com.empresa.ressarcimento.produtos.api.ArquivoProdutosDTO;
+import br.com.empresa.ressarcimento.produtos.api.GerarPlanilhaAutomaticaRequest;
+import br.com.empresa.ressarcimento.produtos.api.LogGeracaoPlanilhaDTO;
 import br.com.empresa.ressarcimento.produtos.api.ProdutoDTO;
+import br.com.empresa.ressarcimento.produtos.automatizado.ProdutoPlanilhaAutomaticaService;
 import br.com.empresa.ressarcimento.shared.api.ResultadoImportacaoDTO;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.xml.bind.JAXBException;
 import java.io.IOException;
 import java.util.List;
@@ -16,6 +21,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -24,9 +30,11 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequestMapping("/api/produtos")
 @RequiredArgsConstructor
+@Tag(name = "Produtos", description = "MATRI-NAC e geração automática da planilha de produtos")
 public class ProdutoController {
 
     private final ProdutoService service;
+    private final ProdutoPlanilhaAutomaticaService planilhaAutomaticaService;
 
     @PostMapping(value = "/importar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ResultadoImportacaoDTO> importar(@RequestParam("arquivo") MultipartFile arquivo)
@@ -73,5 +81,24 @@ public class ProdutoController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=enviProdutoRessarcimento_" + id + ".xml")
                 .contentType(MediaType.APPLICATION_XML)
                 .body(xml);
+    }
+
+    @Operation(summary = "Gera Planilha Produtos a partir de resumonf.xlsx, EFD e XML de NF-e (pastas em ressarcimento.*-dir)")
+    @PostMapping("/gerar-planilha-automatica")
+    public ResponseEntity<byte[]> gerarPlanilhaAutomatica(
+            @RequestBody(required = false) GerarPlanilhaAutomaticaRequest body) throws IOException {
+        byte[] xlsx = planilhaAutomaticaService.gerarPlanilhaAutomatica(body);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=planilha_produtos.xlsx")
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(xlsx);
+    }
+
+    @Operation(summary = "Lista logs de inconsistências da geração automática da Planilha Produtos")
+    @GetMapping("/logs-geracao-planilha")
+    public ResponseEntity<Page<LogGeracaoPlanilhaDTO>> logsGeracaoPlanilha(
+            @PageableDefault(size = 50) Pageable pageable) {
+        return ResponseEntity.ok(planilhaAutomaticaService.listarLogs(pageable));
     }
 }

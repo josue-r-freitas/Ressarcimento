@@ -2,6 +2,7 @@ package br.com.empresa.ressarcimento.shared.api;
 
 import br.com.empresa.ressarcimento.shared.exception.DeclaranteNaoEncontradoException;
 import br.com.empresa.ressarcimento.shared.exception.ErroImportacaoPlanilhaException;
+import br.com.empresa.ressarcimento.shared.exception.RecursoNaoEncontradoException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import java.time.OffsetDateTime;
@@ -51,6 +52,19 @@ public class GlobalExceptionHandler {
                 .build();
 
         return ResponseEntity.badRequest().body(body);
+    }
+
+    @ExceptionHandler(RecursoNaoEncontradoException.class)
+    public ResponseEntity<ErrorResponse> handleRecursoNaoEncontrado(
+            RecursoNaoEncontradoException ex, HttpServletRequest request) {
+        ErrorResponse body = ErrorResponse.builder()
+                .timestamp(OffsetDateTime.now())
+                .status(HttpStatus.NOT_FOUND.value())
+                .error(HttpStatus.NOT_FOUND.getReasonPhrase())
+                .message(ex.getMessage())
+                .path(request.getRequestURI())
+                .build();
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
     }
 
     @ExceptionHandler(DeclaranteNaoEncontradoException.class)

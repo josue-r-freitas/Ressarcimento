@@ -22,3 +22,17 @@ logging:
     root: INFO
     br.com.empresa.ressarcimento: INFO
 
+# Swagger/OpenAPI (springdoc)
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+
+# Pastas para geração automática da Planilha Produtos (resumonf + EFD + XML NF-e)
+ressarcimento:
+  resumo-notas-dir: ${RESSARCIMENTO_RESUMO_NOTAS_DIR:}
+  efds-dir: ${RESSARCIMENTO_EFDS_DIR:}
+  nfes-dir: ${RESSARCIMENTO_NFES_DIR:}
+

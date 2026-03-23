@@ -78,6 +78,8 @@
         <li class="endpoint"><span class="method post">POST</span> <code>/api/produtos/gerar-xml</code> – Gerar XML enviProdutoRessarcimento e retornar para download</li>
         <li class="endpoint"><span class="method get">GET</span> <a href="/api/produtos/historico"><code>/api/produtos/historico</code></a> – Listar histórico de arquivos de produtos gerados</li>
         <li class="endpoint"><span class="method get">GET</span> <code>/api/produtos/historico/{id}/download</code> – Download do XML de produtos pelo ID do histórico</li>
+        <li class="endpoint"><span class="method post">POST</span> <code>/api/produtos/gerar-planilha-automatica</code> – Gera Planilha Produtos a partir das pastas configuradas (<code>ressarcimento.*-dir</code>); body JSON opcional: <code>anoReferencia</code>, <code>mesReferencia</code>, <code>nomeArquivoResumo</code></li>
+        <li class="endpoint"><span class="method get">GET</span> <a href="/api/produtos/logs-geracao-planilha"><code>/api/produtos/logs-geracao-planilha</code></a> – Logs de inconsistências da geração automática (paginação <code>page</code>, <code>size</code>)</li>
     </ul>
 
     <h2>Pedidos (versão 2.00)</h2>

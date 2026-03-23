@@ -1,0 +1,20 @@
+Gerar a tabela de-para Cliente / Fornecedor
+
+1. Partir de notas de entrada (e para este trabalho somente as notas nota de entrada do fornecedor... mas, no final das quantas a planilha de resumo de notas vai fazer a filtragem);
+2. Obter dados de produtos 
+2.1 - ir no C170: obter o codigoInterno, Unidade interna do produto
+2.2 - ir no 0200/0220: obter a descrição do produto / fator de conversão
+2.3 - ir no resumo de notas: obter o cnpjFornecedor, codProdFornecedor (pela chave de acesso e seq. item)
+2.4 - ir no xml da nota: unidadeProdutoFornecedor (cnpjFornecedor, codProdFornecedor, seq. item)
+
+1. Fluxo para montagem do de-para
+	Resumo de notas
+	   ||
+	   \/
+    Arquivos EFD
+	   ||
+	   \/
+	   XML de notas de Entrada
+	   
+2. Para busca de notas de saída
+     Busca pelo código do item
