@@ -65,6 +65,7 @@ public class LeitorNfeUcom {
 
     /**
      * Extrai uCom do item com nItem = seqItem; se codProdFornecedor não for vazio, reforça correspondência com cProd.
+     * A validação de tamanho (1–6 caracteres, manual NF-e) é feita em {@code ProdutoPlanilhaAutomaticaService}.
      */
     public Optional<String> extrairUcom(Path xmlFile, int seqItem, String codProdFornecedor) throws Exception {
         DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();

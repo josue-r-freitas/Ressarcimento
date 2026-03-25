@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- edited with XMLSpy v2008 (http://www.altova.com) by Rodrigo (Pessoal) -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns="http://www.sefaz.am.gov.br/ressarcimento" targetNamespace="http://www.sefaz.am.gov.br/ressarcimento" elementFormDefault="qualified" attributeFormDefault="unqualified">
+	<xs:include schemaLocation="tiposBasicosRessarcimento_v1.00.xsd"/>
+	<xs:complexType name="TProdutoRessarcimento">
+		<xs:annotation>
+			<xs:documentation>Tipo de definição do leiaute do arquivo de produtos sujeitos ao ressarcimento.</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="versao" type="TVersao">
+				<xs:annotation>
+					<xs:documentation>Número da versão de esquema XML do arquivo.</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="dadosDeclarante">
+				<xs:complexType>
+					<xs:sequence>
+						<xs:element name="cnpjRaiz" type="TCnpjRaiz">
+							<xs:annotation>
+								<xs:documentation>Raiz do CNPJ - primeiras 8 posições numéricas do CNPJ.</xs:documentation>
+							</xs:annotation>
+						</xs:element>
+						<xs:element name="razaoSocial" type="TTextoGeral">
+							<xs:annotation>
+								<xs:documentation>Razão Social do declarante.</xs:documentation>
+							</xs:annotation>
+						</xs:element>
+						<xs:element name="nomeResponsavel" type="TTextoGeral">
+							<xs:annotation>
+								<xs:documentation>Nome do responsável pelo preenchimento das informações.</xs:documentation>
+							</xs:annotation>
+						</xs:element>
+						<xs:element name="foneResponsavel" type="TFoneContato">
+							<xs:annotation>
+								<xs:documentation>Telefone do responsável pelo preenchimento das informações.</xs:documentation>
+							</xs:annotation>
+						</xs:element>
+						<xs:element name="emailResponsavel" type="TTextoGeral">
+							<xs:annotation>
+								<xs:documentation>E-mail do responsável pelo preenchimento das informações.</xs:documentation>
+							</xs:annotation>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="listaProdutos">
+				<xs:complexType>
+					<xs:sequence>
+						<xs:element name="produto" maxOccurs="unbounded">
+							<xs:complexType>
+								<xs:sequence>
+									<xs:element name="codInternoProduto" type="TCodProduto">
+										<xs:annotation>
+											<xs:documentation>Código interno do produto cadastrado nos sistemas do declarante.</xs:documentation>
+										</xs:annotation>
+									</xs:element>
+									<xs:element name="descricaoProduto">
+										<xs:annotation>
+											<xs:documentation>Descrição do produto ou serviço.</xs:documentation>
+										</xs:annotation>
+										<xs:simpleType>
+											<xs:restriction base="TString">
+												<xs:maxLength value="120"/>
+												<xs:minLength value="1"/>
+											</xs:restriction>
+										</xs:simpleType>
+									</xs:element>
+									<xs:element name="unidadeInternaProduto" type="TUnidProduto">
+										<xs:annotation>
+											<xs:documentation>Unidade de comercialização do produto pelo declarante.</xs:documentation>
+										</xs:annotation>
+									</xs:element>
+									<xs:element name="fatorConversao" type="TFatorConversao">
+										<xs:annotation>
+											<xs:documentation>Representa a quantidade de itens que ingressam no estoque do declarante para cada aquisição na unidade utilizada pelo fornecedor.</xs:documentation>
+										</xs:annotation>
+									</xs:element>
+									<xs:element name="cnpjFornecedor" type="TCnpj">
+										<xs:annotation>
+											<xs:documentation>Número de CNPJ do fornecedor.</xs:documentation>
+										</xs:annotation>
+									</xs:element>
+									<xs:element name="codProdFornecedor" type="TCodProduto">
+										<xs:annotation>
+											<xs:documentation>Código do produto que consta na nota fiscal de compra - emitida pelo fornecedor.</xs:documentation>
+										</xs:annotation>
+									</xs:element>
+									<xs:element name="unidadeProdutoFornecedor" type="TUnidProduto">
+										<xs:annotation>
+											<xs:documentation>Unidade de comercialização do produto pelo fornecedor.</xs:documentation>
+										</xs:annotation>
+									</xs:element>
+								</xs:sequence>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+		</xs:sequence>
+	</xs:complexType>
+</xs:schema>

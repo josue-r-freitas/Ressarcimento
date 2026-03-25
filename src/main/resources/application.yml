@@ -16,6 +16,8 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+  thymeleaf:
+    cache: false
 
 logging:
   level:
@@ -30,9 +32,9 @@ springdoc:
     path: /swagger-ui.html
     tags-sorter: alpha
 
-# Pastas para geração automática da Planilha Produtos (resumonf + EFD + XML NF-e)
+# Pastas para geração automática da Planilha Produtos (resumonf + EFD + XML NF-e).
+# Override por ambiente: RESSARCIMENTO_RESUMO_NOTAS_DIR, RESSARCIMENTO_EFDS_DIR, RESSARCIMENTO_NFES_DIR.
 ressarcimento:
-  resumo-notas-dir: ${RESSARCIMENTO_RESUMO_NOTAS_DIR:}
-  efds-dir: ${RESSARCIMENTO_EFDS_DIR:}
-  nfes-dir: ${RESSARCIMENTO_NFES_DIR:}
-
+  resumo-notas-dir: ${RESSARCIMENTO_RESUMO_NOTAS_DIR:C:/Users/josue/OneDrive/Documentos/TrabalhosExtras/Ressarcimento/Processamento/Entrada/resumo}
+  efds-dir: ${RESSARCIMENTO_EFDS_DIR:C:/Users/josue/OneDrive/Documentos/TrabalhosExtras/Ressarcimento/Processamento/Entrada/efds}
+  nfes-dir: ${RESSARCIMENTO_NFES_DIR:C:/Users/josue/OneDrive/Documentos/TrabalhosExtras/Ressarcimento/Processamento/Entrada/nfes}

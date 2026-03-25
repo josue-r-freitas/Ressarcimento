@@ -38,7 +38,8 @@ public class EscritorPlanilhaProdutosExcel {
                 row.createCell(3).setCellValue(p.getFatorConversao().doubleValue());
                 row.createCell(4).setCellValue(p.getCnpjFornecedor());
                 row.createCell(5).setCellValue(p.getCodProdFornecedor());
-                row.createCell(6).setCellValue(p.getUnidadeProdutoFornecedor());
+                String uForn = p.getUnidadeProdutoFornecedor();
+                row.createCell(6).setCellValue(uForn != null ? uForn : "");
             }
             for (int i = 0; i < CABECALHOS.length; i++) {
                 sheet.autoSizeColumn(i);

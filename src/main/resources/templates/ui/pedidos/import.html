@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<head th:replace="~{fragments/head :: head}"></head>
+<body class="bg-light">
+<div th:replace="~{fragments/nav :: nav}"></div>
+<main class="container pb-5">
+    <h1 class="h4 mb-3" th:text="${pageTitle}">Importar pedidos</h1>
+    <div th:replace="~{fragments/alerts :: flash}"></div>
+    <form th:action="@{/ui/pedidos/importar}" method="post" enctype="multipart/form-data" class="card shadow-sm mb-4">
+        <div class="card-body">
+            <label class="form-label" for="arquivo">Arquivo da planilha</label>
+            <input id="arquivo" class="form-control" type="file" name="arquivo" required/>
+        </div>
+        <div class="card-footer">
+            <button type="submit" class="btn btn-primary">Importar</button>
+        </div>
+    </form>
+    <div th:if="${resultado != null}" class="card shadow-sm">
+        <div class="card-header">Resultado da importação</div>
+        <div class="card-body">
+            <p class="mb-1"><strong>Linhas processadas:</strong> <span th:text="${resultado.totalLinhasProcessadas}">0</span></p>
+            <p class="mb-1"><strong>Com erro:</strong> <span th:text="${resultado.totalLinhasComErro}">0</span></p>
+            <p class="mb-3"><strong>Persistidas:</strong> <span th:text="${resultado.totalPersistidas}">0</span></p>
+            <div th:if="${resultado.erros != null and !resultado.erros.isEmpty()}">
+                <h2 class="h6">Erros por linha</h2>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered align-middle">
+                        <thead class="table-light">
+                        <tr>
+                            <th>Linha</th>
+                            <th>Campo</th>
+                            <th>Valor</th>
+                            <th>Mensagem</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="e : ${resultado.erros}">
+                            <td th:text="${e.linha}">1</td>
+                            <td th:text="${e.campo}">-</td>
+                            <td th:text="${e.valorInformado}">-</td>
+                            <td th:text="${e.mensagem}">-</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+<th:block th:replace="~{fragments/scripts :: bootstrap}"></th:block>
+</body>
+</html>

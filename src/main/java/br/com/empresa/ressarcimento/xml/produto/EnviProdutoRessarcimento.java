@@ -11,7 +11,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-@XmlRootElement(name = "enviProdutoRessarcimento")
+@XmlRootElement(
+        name = "enviProdutoRessarcimento",
+        namespace = "http://www.sefaz.am.gov.br/ressarcimento")
 @XmlAccessorType(XmlAccessType.FIELD)
 @Data
 @NoArgsConstructor

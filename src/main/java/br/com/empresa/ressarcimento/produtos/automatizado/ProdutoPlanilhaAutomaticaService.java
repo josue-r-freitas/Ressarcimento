@@ -170,7 +170,8 @@ public class ProdutoPlanilhaAutomaticaService {
                 fator = FATOR_PADRAO;
             }
 
-            Path xmlNfe;
+            String unidadeFornecedor = "";
+            Path xmlNfe = null;
             try {
                 var xmlOpt = leitorNfeUcom.localizarArquivoXml(dirNfes, chave);
                 if (xmlOpt.isEmpty()) {
@@ -179,56 +180,57 @@ public class ProdutoPlanilhaAutomaticaService {
                             chave,
                             seq,
                             dirNfes.toString(),
-                            "XML da NF-e de entrada não encontrado na pasta configurada.",
+                            "XML da NF-e de entrada não encontrado na pasta configurada. "
+                                    + "unidade_fornecedor ficará em branco.",
                             agora));
-                    continue;
+                } else {
+                    xmlNfe = xmlOpt.get();
+                    try {
+                        var uOpt = leitorNfeUcom.extrairUcom(xmlNfe, seq, codg);
+                        if (uOpt.isEmpty()) {
+                            logs.add(log(
+                                    TipoLogGeracaoPlanilha.DADO_INVALIDO,
+                                    chave,
+                                    seq,
+                                    xmlNfe.getFileName().toString(),
+                                    "uCom não localizado no XML para nItem=" + seq
+                                            + " (e CODG. ITEM se informado). unidade_fornecedor ficará em branco.",
+                                    agora));
+                        } else {
+                            String rawU = uOpt.get().trim();
+                            if (!uComDaNFeUtilizavel(rawU)) {
+                                logs.add(log(
+                                        TipoLogGeracaoPlanilha.DADO_INVALIDO,
+                                        chave,
+                                        seq,
+                                        xmlNfe.getFileName().toString(),
+                                        "uCom fora do limite 1–6 caracteres (manual NF-e, grupo prod): " + rawU
+                                                + ". unidade_fornecedor ficará em branco.",
+                                        agora));
+                            } else {
+                                unidadeFornecedor = rawU;
+                            }
+                        }
+                    } catch (Exception e) {
+                        logs.add(log(
+                                TipoLogGeracaoPlanilha.DADO_INVALIDO,
+                                chave,
+                                seq,
+                                xmlNfe.getFileName().toString(),
+                                "Falha ao ler XML: " + e.getMessage()
+                                        + ". unidade_fornecedor ficará em branco.",
+                                agora));
+                    }
                 }
-                xmlNfe = xmlOpt.get();
             } catch (IOException e) {
                 logs.add(log(
                         TipoLogGeracaoPlanilha.XML_NFE_NAO_ENCONTRADO,
                         chave,
                         seq,
                         dirNfes.toString(),
-                        "Erro ao localizar XML: " + e.getMessage(),
+                        "Erro ao localizar XML: " + e.getMessage()
+                                + ". unidade_fornecedor ficará em branco.",
                         agora));
-                continue;
-            }
-
-            String uCom;
-            try {
-                var uOpt = leitorNfeUcom.extrairUcom(xmlNfe, seq, codg);
-                if (uOpt.isEmpty()) {
-                    logs.add(log(
-                            TipoLogGeracaoPlanilha.DADO_INVALIDO,
-                            chave,
-                            seq,
-                            xmlNfe.getFileName().toString(),
-                            "uCom não localizado no XML para nItem=" + seq + " (e CODG. ITEM se informado).",
-                            agora));
-                    continue;
-                }
-                uCom = uOpt.get();
-            } catch (Exception e) {
-                logs.add(log(
-                        TipoLogGeracaoPlanilha.DADO_INVALIDO,
-                        chave,
-                        seq,
-                        xmlNfe.getFileName().toString(),
-                        "Falha ao ler XML: " + e.getMessage(),
-                        agora));
-                continue;
-            }
-
-            if (uCom.length() < 2 || uCom.length() > 8) {
-                logs.add(log(
-                        TipoLogGeracaoPlanilha.DADO_INVALIDO,
-                        chave,
-                        seq,
-                        xmlNfe.getFileName().toString(),
-                        "uCom fora do limite 2–8 caracteres: " + uCom,
-                        agora));
-                continue;
             }
 
             String descr = info0200.getDescrItem();
@@ -244,7 +246,7 @@ public class ProdutoPlanilhaAutomaticaService {
                     .fatorConversao(fator)
                     .cnpjFornecedor(cnpj)
                     .codProdFornecedor(codg.trim())
-                    .unidadeProdutoFornecedor(uCom)
+                    .unidadeProdutoFornecedor(unidadeFornecedor)
                     .build();
 
             String chaveDedup = String.join(
@@ -284,6 +286,8 @@ public class ProdutoPlanilhaAutomaticaService {
                 .build();
     }
 
+    private static final int ARQUIVO_ORIGEM_MAX = 500;
+
     private static LogGeracaoPlanilha log(
             TipoLogGeracaoPlanilha tipo,
             String chave,
@@ -291,14 +295,29 @@ public class ProdutoPlanilhaAutomaticaService {
             String arquivoOrigem,
             String mensagem,
             LocalDateTime data) {
+        String origem = arquivoOrigem;
+        if (origem != null && origem.length() > ARQUIVO_ORIGEM_MAX) {
+            origem = origem.substring(0, ARQUIVO_ORIGEM_MAX - 3) + "...";
+        }
         return LogGeracaoPlanilha.builder()
                 .tipo(tipo.name())
                 .chaveNfe(chave)
                 .numItem(numItem)
-                .arquivoOrigem(arquivoOrigem)
+                .arquivoOrigem(origem)
                 .mensagem(mensagem)
                 .dataProcessamento(data)
                 .build();
+    }
+
+    /**
+     * uCom da NF-e (Manual de Orientação Contribuinte / leiaute NF-e, grupo prod): tamanho 1 a 6 caracteres.
+     */
+    private static boolean uComDaNFeUtilizavel(String u) {
+        if (u == null || u.isBlank()) {
+            return false;
+        }
+        int len = u.trim().length();
+        return len >= 1 && len <= 6;
     }
 
     private static Path exigirDiretorio(String caminho, String propriedade) {

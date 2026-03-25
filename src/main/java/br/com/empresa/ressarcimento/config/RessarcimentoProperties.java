@@ -10,15 +10,15 @@ public class RessarcimentoProperties {
     /**
      * Diretório com planilhas resumonf.xlsx (resumo de notas).
      */
-    private String resumoNotasDir = "";
+    private String resumoNotasDir = "C:\\Users\\josue\\OneDrive\\Documentos\\TrabalhosExtras\\Ressarcimento\\Processamento\\Entrada\\resumo";
 
     /**
      * Diretório com arquivos texto EFD ICMS/IPI (SPED).
      */
-    private String efdsDir = "";
+    private String efdsDir = "C:\\Users\\josue\\OneDrive\\Documentos\\TrabalhosExtras\\Ressarcimento\\Processamento\\Entrada\\efds";
 
     /**
      * Diretório com XML de NF-e de entrada.
      */
-    private String nfesDir = "";
+    private String nfesDir = "C:\\Users\\josue\\OneDrive\\Documentos\\TrabalhosExtras\\Ressarcimento\\Processamento\\Entrada\\nfes";
 }

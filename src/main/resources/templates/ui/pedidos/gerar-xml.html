@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<head th:replace="~{fragments/head :: head}"></head>
+<body class="bg-light">
+<div th:replace="~{fragments/nav :: nav}"></div>
+<main class="container pb-5">
+    <h1 class="h4 mb-3" th:text="${pageTitle}">Gerar XML</h1>
+    <p class="text-muted">Informe o ano e o mês de referência (mesmo formato usado na API).</p>
+    <form th:action="@{/ui/pedidos/gerar-xml}" method="post" class="card shadow-sm">
+        <div class="card-body row g-3">
+            <div class="col-md-2">
+                <label class="form-label" for="ano">Ano</label>
+                <input id="ano" class="form-control" name="ano" required maxlength="4"/>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label" for="mes">Mês</label>
+                <input id="mes" class="form-control" name="mes" required maxlength="2"/>
+            </div>
+        </div>
+        <div class="card-footer">
+            <button type="submit" class="btn btn-primary">Baixar XML</button>
+        </div>
+    </form>
+</main>
+<th:block th:replace="~{fragments/scripts :: bootstrap}"></th:block>
+</body>
+</html>

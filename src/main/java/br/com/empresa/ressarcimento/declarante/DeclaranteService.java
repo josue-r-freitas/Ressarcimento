@@ -3,6 +3,7 @@ package br.com.empresa.ressarcimento.declarante;
 import br.com.empresa.ressarcimento.declarante.api.DeclaranteDTO;
 import br.com.empresa.ressarcimento.declarante.domain.Declarante;
 import br.com.empresa.ressarcimento.shared.exception.DeclaranteNaoEncontradoException;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +19,12 @@ public class DeclaranteService {
         Declarante entidade = repository.findAll().stream().findFirst()
                 .orElseThrow(DeclaranteNaoEncontradoException::new);
         return toDTO(entidade);
+    }
+
+    /** Para telas que precisam pré-preencher o formulário sem lançar se ainda não houver declarante. */
+    @Transactional(readOnly = true)
+    public Optional<DeclaranteDTO> buscarSeExistir() {
+        return repository.findAll().stream().findFirst().map(DeclaranteService::toDTO);
     }
 
     @Transactional(readOnly = true)

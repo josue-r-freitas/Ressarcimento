@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<head th:replace="~{fragments/head :: head}"></head>
+<body class="bg-light">
+<div th:replace="~{fragments/nav :: nav}"></div>
+<main class="container pb-5">
+    <h1 class="h4 mb-3" th:text="${pageTitle}">Logs de geração</h1>
+    <div class="table-responsive shadow-sm bg-white rounded border">
+        <table class="table table-sm table-striped mb-0">
+            <thead class="table-light">
+            <tr>
+                <th>Data</th>
+                <th>Tipo</th>
+                <th>Chave NF-e</th>
+                <th>Item</th>
+                <th>Arquivo</th>
+                <th>Mensagem</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="l : ${page.content}">
+                <td th:text="${l.dataProcessamento}">-</td>
+                <td th:text="${l.tipo}">-</td>
+                <td class="text-break" th:text="${l.chaveNfe}">-</td>
+                <td th:text="${l.numItem}">-</td>
+                <td th:text="${l.arquivoOrigem}">-</td>
+                <td th:text="${l.mensagem}">-</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+    <nav class="mt-3" th:if="${page.totalPages > 1}">
+        <ul class="pagination pagination-sm">
+            <li class="page-item" th:classappend="${page.first} ? ' disabled'">
+                <a class="page-link" th:href="@{/ui/produtos/logs-geracao(page=${page.number - 1}, size=${page.size})}">Anterior</a>
+            </li>
+            <li class="page-item disabled"><span class="page-link"
+                                                 th:text="'Página ' + ${page.number + 1} + ' de ' + ${page.totalPages}">1</span></li>
+            <li class="page-item" th:classappend="${page.last} ? ' disabled'">
+                <a class="page-link" th:href="@{/ui/produtos/logs-geracao(page=${page.number + 1}, size=${page.size})}">Próxima</a>
+            </li>
+        </ul>
+    </nav>
+</main>
+<th:block th:replace="~{fragments/scripts :: bootstrap}"></th:block>
+</body>
+</html>

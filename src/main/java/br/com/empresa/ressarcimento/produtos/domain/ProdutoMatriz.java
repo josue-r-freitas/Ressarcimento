@@ -45,7 +45,7 @@ public class ProdutoMatriz {
     @Size(min = 1, max = 100)
     private String descricaoProduto;
 
-    /** unidadeInternaProduto (D05) 2-8 */
+    /** unidadeInternaProduto (D05) TUnidProduto: 1–6 (XSD tiposBasicos) */
     @Column(name = "unidade_interna_produto", nullable = false, length = 8)
     @NotBlank
     @Size(min = 2, max = 8)
@@ -70,10 +70,10 @@ public class ProdutoMatriz {
     @Size(min = 1, max = 60)
     private String codProdFornecedor;
 
-    /** unidadeProdutoFornecedor (D09) 2-8 */
+    /** unidadeProdutoFornecedor (D09); valores vindos da NF-e uCom: 1–6 caracteres (manual NF-e). */
     @Column(name = "unidade_produto_fornecedor", nullable = false, length = 8)
     @NotBlank
-    @Size(min = 2, max = 8)
+    @Size(min = 1, max = 6)
     private String unidadeProdutoFornecedor;
 
     @Column(name = "created_at", nullable = false)

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- edited with XMLSpy v2008 (http://www.altova.com) by Rodrigo (Pessoal) -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns="http://www.sefaz.am.gov.br/ressarcimento" targetNamespace="http://www.sefaz.am.gov.br/ressarcimento" elementFormDefault="qualified" attributeFormDefault="unqualified">
+	<xs:include schemaLocation="leiauteProdutoRessarcimento_v1.00.xsd"/>
+	<xs:element name="enviProdutoRessarcimento" type="TProdutoRessarcimento">
+		<xs:annotation>
+			<xs:documentation>Schema de validação XML do envio do arquivo de produtos sujeitos ao ressarcimento.</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+</xs:schema>

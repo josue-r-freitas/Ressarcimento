@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<head th:replace="~{fragments/head :: head}"></head>
+<body class="bg-light">
+<div th:replace="~{fragments/nav :: nav}"></div>
+<main class="container pb-5">
+    <h1 class="h4 mb-3" th:text="${pageTitle}">Lista</h1>
+    <form method="get" th:action="@{/ui/produtos/lista}" class="row g-2 align-items-end card card-body shadow-sm mb-3">
+        <div class="col-md-3">
+            <label class="form-label" for="codigo">Código</label>
+            <input id="codigo" class="form-control" name="codigo" th:value="${codigo}"/>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label" for="descricao">Descrição</label>
+            <input id="descricao" class="form-control" name="descricao" th:value="${descricao}"/>
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-primary w-100">Filtrar</button>
+        </div>
+    </form>
+    <div class="table-responsive shadow-sm bg-white rounded border">
+        <table class="table table-hover table-sm mb-0">
+            <thead class="table-light">
+            <tr>
+                <th>Código</th>
+                <th>Descrição</th>
+                <th>Unid.</th>
+                <th>Fator</th>
+                <th>CNPJ fornec.</th>
+                <th>Cód. fornec.</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="p : ${page.content}">
+                <td th:text="${p.codInternoProduto}">-</td>
+                <td th:text="${p.descricaoProduto}">-</td>
+                <td th:text="${p.unidadeInternaProduto}">-</td>
+                <td th:text="${p.fatorConversao}">-</td>
+                <td th:text="${p.cnpjFornecedor}">-</td>
+                <td th:text="${p.codProdFornecedor}">-</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+    <nav class="mt-3" th:if="${page.totalPages > 1}">
+        <ul class="pagination pagination-sm">
+            <li class="page-item" th:classappend="${page.first} ? ' disabled'">
+                <a class="page-link"
+                   th:href="@{/ui/produtos/lista(page=${page.number - 1}, size=${page.size}, codigo=${codigo}, descricao=${descricao})}">Anterior</a>
+            </li>
+            <li class="page-item disabled"><span class="page-link"
+                                                 th:text="'Página ' + ${page.number + 1} + ' de ' + ${page.totalPages}">1</span></li>
+            <li class="page-item" th:classappend="${page.last} ? ' disabled'">
+                <a class="page-link"
+                   th:href="@{/ui/produtos/lista(page=${page.number + 1}, size=${page.size}, codigo=${codigo}, descricao=${descricao})}">Próxima</a>
+            </li>
+        </ul>
+    </nav>
+</main>
+<th:block th:replace="~{fragments/scripts :: bootstrap}"></th:block>
+</body>
+</html>

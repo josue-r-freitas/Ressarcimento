@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<nav th:fragment="nav" class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+    <div class="container-fluid">
+        <a class="navbar-brand" th:href="@{/ui}">Ressarcimento ICMS-ST</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarMain">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item"><a class="nav-link" th:href="@{/ui/declarante}">Declarante</a></li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">Produtos</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" th:href="@{/ui/produtos}">Importar</a></li>
+                        <li><a class="dropdown-item" th:href="@{/ui/produtos/lista}">Lista</a></li>
+                        <li><a class="dropdown-item" th:href="@{/ui/produtos/gerar-xml}">Gerar XML</a></li>
+                        <li><a class="dropdown-item" th:href="@{/ui/produtos/historico}">Histórico</a></li>
+                        <li><hr class="dropdown-divider"/></li>
+                        <li><a class="dropdown-item" th:href="@{/ui/produtos/planilha-automatica}">Planilha automática</a></li>
+                        <li><a class="dropdown-item" th:href="@{/ui/produtos/logs-geracao}">Logs de geração</a></li>
+                    </ul>
+                </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">Pedidos</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" th:href="@{/ui/pedidos}">Importar</a></li>
+                        <li><a class="dropdown-item" th:href="@{/ui/pedidos/lista}">Lista</a></li>
+                        <li><a class="dropdown-item" th:href="@{/ui/pedidos/gerar-xml}">Gerar XML</a></li>
+                        <li><a class="dropdown-item" th:href="@{/ui/pedidos/historico}">Histórico</a></li>
+                    </ul>
+                </li>
+                <li class="nav-item"><a class="nav-link" href="/swagger-ui.html" target="_blank" rel="noopener">Swagger</a></li>
+            </ul>
+        </div>
+    </div>
+</nav>
+</body>
+</html>

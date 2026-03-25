@@ -62,15 +62,15 @@ Serviço expõe `getEntidadeOuLanca()` usado por produtos e pedidos.
 
 ### 4.2 Produtos (`/api/produtos`)
 
-- **POST `/importar`** – multipart `arquivo` (CSV ou Excel); validação Bean Validation em `ProdutoPlanilhaDTO`; em caso de erro, retorna `ResultadoImportacaoDTO` com lista de `ErroPlanilhaDTO` **sem persistir** nada.
+- **POST `/importar`** – multipart `arquivo` (CSV ou Excel); validação Bean Validation em `ProdutoPlanilhaDTO`; em caso de erro, retorna `ResultadoImportacaoDTO` com lista de `ErroPlanilhaDTO` **sem persistir** nada. Se todas as linhas forem válidas, antes de gravar apaga `log_geracao_planilha`, zera `produto_matriz_id` em `item_nota_saida` e apaga `produto_matriz`, substituindo o cadastro pelo conteúdo da planilha.
 - **GET `/`** – listagem paginada; filtros opcionais `codigo`, `descricao`.
-- **POST `/gerar-xml`** – monta XML com todos os produtos ordenados por código interno + declarante; grava em `arquivo_produtos`; retorna arquivo para download (`enviProdutoRessarcimento.xml`).
+- **POST `/gerar-xml`** – monta XML **layout 1.00** com namespace `http://www.sefaz.am.gov.br/ressarcimento`, conforme XSDs em `src/main/resources/schema/produto/` (espelho de `pacote-trabalho/layout-schemas/Produto`); validação automática contra o schema antes de devolver o arquivo. Exige ao menos um produto na matriz (`TVersao` = `1.00`, `TFatorConversao` até 9 caracteres, unidades `TUnidProduto` 1–6 caracteres, CNPJ 14 dígitos). Grava em `arquivo_produtos`; download `enviProdutoRessarcimento.xml`.
 - **GET `/historico`** – histórico paginado do declarante.
 - **GET `/historico/{id}/download`** – download do XML salvo no histórico.
 - **POST `/gerar-planilha-automatica`** – gera Excel da Planilha Produtos a partir das pastas configuradas em `ressarcimento.resumo-notas-dir`, `ressarcimento.efds-dir` e `ressarcimento.nfes-dir` (ou variáveis `RESSARCIMENTO_*`). Body JSON opcional: `anoReferencia`, `mesReferencia`, `nomeArquivoResumo`.
 - **GET `/logs-geracao-planilha`** – paginação Spring (`page`, `size`) com logs de inconsistências (`log_geracao_planilha`, Flyway `V2`).
 
-Componentes: `LeitorPlanilhaProdutos`, `ValidacaoPlanilhaUtil`, `GeradorXmlProdutos`, `EnviProdutoRessarcimento` (JAXB), além do módulo `produtos.automatizado` (`ParserEfdService`, `LeitorResumoNf`, `LeitorNfeUcom`, `ProdutoPlanilhaAutomaticaService`, `EscritorPlanilhaProdutosExcel`).
+Componentes: `LeitorPlanilhaProdutos`, `ValidacaoPlanilhaUtil`, `GeradorXmlProdutos`, `ValidadorXmlProdutoRessarcimento`, `EnviProdutoRessarcimento` (JAXB), além do módulo `produtos.automatizado` (`ParserEfdService`, `LeitorResumoNf`, `LeitorNfeUcom`, `ProdutoPlanilhaAutomaticaService`, `EscritorPlanilhaProdutosExcel`).
 
 ### 4.3 Pedidos / operações (`/api/pedidos`)
 
@@ -84,8 +84,9 @@ Componentes: `LeitorPlanilhaOperacoes`, `GeradorXmlPedidos`, `EnviOperacaoRessar
 ### 4.4 Compartilhado
 
 - **`ResultadoImportacaoDTO`** – totais e erros por linha na importação.
-- **`GlobalExceptionHandler`** – validação de request (`MethodArgumentNotValidException`), `ConstraintViolationException`, declarante não encontrado, `ErroImportacaoPlanilhaException`, `IllegalArgumentException`.
-- **`index.html`** (estático) – página simples listando os endpoints principais.
+- **`GlobalExceptionHandler`** – aplica-se apenas a `@RestController` (`@ControllerAdvice(annotations = RestController.class)`): validação de request (`MethodArgumentNotValidException`), `ConstraintViolationException`, declarante não encontrado, `ErroImportacaoPlanilhaException`, `IllegalArgumentException`, respostas JSON `ErrorResponse`.
+- **`UiExceptionHandler`** (`br.com.empresa.ressarcimento.ui`) – erros nas telas Thymeleaf (`IllegalArgumentException`, `RecursoNaoEncontradoException`, `DeclaranteNaoEncontradoException`, `JAXBException`, `IOException`), view `ui/error`.
+- **Interface web (`/ui`)** – Thymeleaf + Bootstrap 5 (CDN); rotas em `HomeUiController`, `UiDeclaranteController`, `UiProdutoController`, `UiPedidoController`; mesmos serviços da API. **`GET /`** redireciona para **`/ui`**. **`index.html`** estático redireciona para `/ui` (evita duplicar a home com a documentação antiga de endpoints).
 
 ---
 
@@ -99,6 +100,7 @@ Componentes: `LeitorPlanilhaOperacoes`, `GeradorXmlPedidos`, `EnviOperacaoRessar
 | `PedidoServiceTest` | Importação pedidos (mocks) |
 | `RessarcimentoApplicationIntegrationTest` | Contexto Spring (H2) |
 | `RessarcimentoSqlServerIntegrationTest` | Integração com SQL Server via Testcontainers |
+| `UiMvcTest` | `MockMvc` em fatia web: home `/ui`, formulário declarante, POST import produtos |
 
 Recursos de teste: `application-test.yml`, scripts SQL em `src/test/resources` quando aplicável.
 
@@ -114,9 +116,10 @@ Tudo abaixo está **concluído** no código atual:
 4. Persistência de matriz de produtos, notas e itens.  
 5. Geração e download de XMLs (produtos e pedidos por período).  
 6. Histórico com armazenamento do conteúdo XML e download por id.  
-7. Documentação OpenAPI + página `index.html`.  
+7. Documentação OpenAPI; `index.html` redireciona para a UI.  
 8. Camada de exceções HTTP padronizada (`ErrorResponse`).  
-9. Testes unitários e de integração (incl. opção SQL Server em container).
+9. Testes unitários e de integração (incl. opção SQL Server em container).  
+10. **Fase 2 – Frontend:** UI Thymeleaf em `/ui` (declarante, produtos, pedidos, planilha automática, logs), redirect `/` → `/ui`, testes `UiMvcTest`.
 
 ---
 
@@ -128,7 +131,7 @@ Ideias para próximas iterações (priorizar conforme necessidade fiscal/operaci
 - **Multi-declarante:** hoje várias operações assumem “primeiro declarante” ou filtram por declarante logado; evoluir para seleção explícita ou tenancy.
 - **Substituição/atualização de dados:** política clara para reimportação (upsert produtos, conflito de chaves NF-e, limpeza por período).
 - **Validação fiscal adicional:** cruzamento chave NF-e com schema oficial, regras do manual SEFAZ/AM por versão do layout.
-- **Frontend:** UI além da página estática (upload, filtros, preview de erros).
+- **Frontend:** UI Thymeleaf em `/ui` (upload, filtros, preview de erros na importação); evoluções possíveis: temas, exportações adicionais.
 - **Assinatura / envio DT-e:** integração com serviço de transmissão (fora do escopo atual).
 - **Observabilidade:** métricas, correlation id, auditoria de importações.
 
@@ -137,8 +140,8 @@ Ideias para próximas iterações (priorizar conforme necessidade fiscal/operaci
 ## 8. Como acompanhar
 
 - Manter este **`PLANO.md`** atualizado a cada marco.
-- Endpoints resumidos em `src/main/resources/static/index.html`.
-- Contrato detalhado em **Swagger UI** após subir a aplicação.
+- **Uso diário (rede interna):** abrir a URL base da aplicação + **`/ui`** (ou **`/`**, que redireciona). Autenticação não está no escopo mínimo; para exposição na internet planejar **Spring Security** (login, HTTPS, credenciais fora do repositório).
+- **`static/index.html`** apenas redireciona para `/ui`; o contrato REST segue em **Swagger UI** (`/swagger-ui.html`) após subir a aplicação.
 
 ---
 

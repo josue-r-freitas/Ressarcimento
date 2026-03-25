@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<head th:replace="~{fragments/head :: head}"></head>
+<body class="bg-light">
+<div th:replace="~{fragments/nav :: nav}"></div>
+<main class="container pb-5">
+    <h1 class="h4 mb-3" th:text="${pageTitle}">Declarante</h1>
+    <div th:replace="~{fragments/alerts :: flash}"></div>
+    <form th:action="@{/ui/declarante}" th:object="${declarante}" method="post" class="card shadow-sm">
+        <div class="card-body row g-3">
+            <div class="col-md-4">
+                <label class="form-label" for="cnpjRaiz">CNPJ raiz (8 dígitos)</label>
+                <input id="cnpjRaiz" class="form-control" th:classappend="${#fields.hasErrors('cnpjRaiz')} ? ' is-invalid'"
+                       th:field="*{cnpjRaiz}" maxlength="8"/>
+                <div class="invalid-feedback" th:if="${#fields.hasErrors('cnpjRaiz')}" th:errors="*{cnpjRaiz}"></div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="ieContribuinteDeclarante">IE do declarante</label>
+                <input id="ieContribuinteDeclarante" class="form-control"
+                       th:classappend="${#fields.hasErrors('ieContribuinteDeclarante')} ? ' is-invalid'"
+                       th:field="*{ieContribuinteDeclarante}"/>
+                <div class="invalid-feedback" th:if="${#fields.hasErrors('ieContribuinteDeclarante')}"
+                     th:errors="*{ieContribuinteDeclarante}"></div>
+            </div>
+            <div class="col-12">
+                <label class="form-label" for="razaoSocial">Razão social</label>
+                <input id="razaoSocial" class="form-control" th:classappend="${#fields.hasErrors('razaoSocial')} ? ' is-invalid'"
+                       th:field="*{razaoSocial}"/>
+                <div class="invalid-feedback" th:if="${#fields.hasErrors('razaoSocial')}" th:errors="*{razaoSocial}"></div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="nomeResponsavel">Nome do responsável</label>
+                <input id="nomeResponsavel" class="form-control"
+                       th:classappend="${#fields.hasErrors('nomeResponsavel')} ? ' is-invalid'"
+                       th:field="*{nomeResponsavel}"/>
+                <div class="invalid-feedback" th:if="${#fields.hasErrors('nomeResponsavel')}"
+                     th:errors="*{nomeResponsavel}"></div>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="foneResponsavel">Telefone</label>
+                <input id="foneResponsavel" class="form-control"
+                       th:classappend="${#fields.hasErrors('foneResponsavel')} ? ' is-invalid'"
+                       th:field="*{foneResponsavel}"/>
+                <div class="invalid-feedback" th:if="${#fields.hasErrors('foneResponsavel')}"
+                     th:errors="*{foneResponsavel}"></div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="emailResponsavel">E-mail</label>
+                <input id="emailResponsavel" type="email" class="form-control"
+                       th:classappend="${#fields.hasErrors('emailResponsavel')} ? ' is-invalid'"
+                       th:field="*{emailResponsavel}"/>
+                <div class="invalid-feedback" th:if="${#fields.hasErrors('emailResponsavel')}"
+                     th:errors="*{emailResponsavel}"></div>
+            </div>
+        </div>
+        <div class="card-footer">
+            <button type="submit" class="btn btn-primary">Salvar</button>
+            <a th:href="@{/ui}" class="btn btn-outline-secondary">Voltar</a>
+        </div>
+    </form>
+</main>
+<th:block th:replace="~{fragments/scripts :: bootstrap}"></th:block>
+</body>
+</html>

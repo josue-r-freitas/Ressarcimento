@@ -35,6 +35,27 @@ class DeclaranteServiceTest {
     }
 
     @Test
+    void buscarSeExistir_retornaVazioQuandoNaoHaDeclarante() {
+        when(repository.findAll()).thenReturn(List.of());
+        assertThat(service.buscarSeExistir()).isEmpty();
+    }
+
+    @Test
+    void buscarSeExistir_retornaDtoQuandoExiste() {
+        Declarante entidade = Declarante.builder()
+                .id(1L)
+                .cnpjRaiz("12345678")
+                .ieContribuinteDeclarante("12345678")
+                .razaoSocial("Empresa Teste")
+                .nomeResponsavel("João")
+                .foneResponsavel("92999999999")
+                .emailResponsavel("joao@teste.com")
+                .build();
+        when(repository.findAll()).thenReturn(List.of(entidade));
+        assertThat(service.buscarSeExistir()).isPresent().get().satisfies(d -> assertThat(d.getCnpjRaiz()).isEqualTo("12345678"));
+    }
+
+    @Test
     void buscar_retornaDTOQuandoExiste() {
         Declarante entidade = Declarante.builder()
                 .id(1L)

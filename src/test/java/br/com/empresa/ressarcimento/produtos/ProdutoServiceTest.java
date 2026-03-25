@@ -2,6 +2,8 @@ package br.com.empresa.ressarcimento.produtos;
 
 import br.com.empresa.ressarcimento.declarante.DeclaranteService;
 import br.com.empresa.ressarcimento.declarante.domain.Declarante;
+import br.com.empresa.ressarcimento.pedidos.ItemNotaSaidaRepository;
+import br.com.empresa.ressarcimento.produtos.automatizado.LogGeracaoPlanilhaRepository;
 import br.com.empresa.ressarcimento.produtos.domain.ArquivoProdutos;
 import br.com.empresa.ressarcimento.produtos.domain.ProdutoMatriz;
 import br.com.empresa.ressarcimento.shared.api.ResultadoImportacaoDTO;
@@ -35,6 +37,10 @@ class ProdutoServiceTest {
     private ProdutoMatrizRepository produtoRepository;
     @Mock
     private ArquivoProdutosRepository arquivoRepository;
+    @Mock
+    private LogGeracaoPlanilhaRepository logGeracaoPlanilhaRepository;
+    @Mock
+    private ItemNotaSaidaRepository itemNotaSaidaRepository;
     @Mock
     private br.com.empresa.ressarcimento.planilhas.LeitorPlanilhaProdutos leitorPlanilha;
     @Mock
@@ -99,6 +105,9 @@ class ProdutoServiceTest {
         assertThat(resultado.getTotalLinhasProcessadas()).isEqualTo(1);
         assertThat(resultado.getTotalPersistidas()).isEqualTo(1);
         assertThat(resultado.getErros()).isEmpty();
+        verify(logGeracaoPlanilhaRepository).deleteAllInBatch();
+        verify(itemNotaSaidaRepository).desvincularProdutosMatriz();
+        verify(produtoRepository).deleteAllInBatch();
         verify(produtoRepository).save(any(ProdutoMatriz.class));
     }
 }

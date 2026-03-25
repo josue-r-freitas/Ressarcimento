@@ -29,7 +29,7 @@ public class ProdutoPlanilhaDTO {
     private String descricaoProduto;
 
     @NotBlank(message = "Unidade interna é obrigatória")
-    @Size(min = 2, max = 8)
+    @Size(min = 1, max = 6)
     private String unidadeInternaProduto;
 
     @NotNull(message = "Fator de conversão é obrigatório")
@@ -45,7 +45,12 @@ public class ProdutoPlanilhaDTO {
     @Size(min = 1, max = 60)
     private String codProdFornecedor;
 
-    @NotBlank(message = "Unidade do produto no fornecedor é obrigatória")
-    @Size(min = 2, max = 8)
+    /**
+     * Pode ficar em branco na planilha gerada automaticamente quando uCom não for obtida na NF-e.
+     * Quando informada, 1–6 caracteres (uCom no XML da NF-e, Manual de Orientação Contribuinte).
+     */
+    @Pattern(
+            regexp = "^$|^.{1,6}$",
+            message = "Unidade do produto no fornecedor deve ter entre 1 e 6 caracteres quando informada (uCom NF-e)")
     private String unidadeProdutoFornecedor;
 }
