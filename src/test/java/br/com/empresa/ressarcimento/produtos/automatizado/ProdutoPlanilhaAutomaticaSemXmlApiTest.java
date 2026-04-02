@@ -48,8 +48,9 @@ class ProdutoPlanilhaAutomaticaSemXmlApiTest {
 
         String efd =
                 """
-                |0200|ITEM01|Produto sem xml no disco||
-                |C100|0|0|FORN|55|00|1|999|%s|
+                |0190|UN|Unidade|
+                |0200|ITEM01|Produto sem xml no disco|||UN|
+                |C100|0|0|FORN|55|00|1|999|%s|15012026|
                 |C170|1|ITEM01|X|10|UN|
                 """
                         .formatted(CHAVE);

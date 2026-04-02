@@ -41,6 +41,7 @@ public class LeitorResumoNf {
             Integer idxDataApres = colunas.get("DATA APRES.");
             Integer idxCnpj = colunas.get("CNPJ FORNECEDOR");
             Integer idxCodg = colunas.get("CODG. ITEM");
+            Integer idxTributo = colunas.get("TRIBUTO");
             if (idxChave == null || idxSeq == null || idxDataApres == null || idxCnpj == null || idxCodg == null) {
                 throw new IllegalArgumentException(
                         "Planilha resumo deve conter colunas: CHAVE, SEQ. ITEM, DATA APRES., CNPJ FORNECEDOR, CODG. ITEM");
@@ -64,6 +65,7 @@ public class LeitorResumoNf {
                     continue;
                 }
                 String cnpj = normalizarCnpj(getCellString(row.getCell(idxCnpj)));
+                String trib = idxTributo != null ? getCellString(row.getCell(idxTributo)) : null;
                 linhas.add(ResumoNfLinhaDTO.builder()
                         .numeroLinhaPlanilha(rowNum)
                         .chave(chave != null ? chave : "")
@@ -71,6 +73,7 @@ public class LeitorResumoNf {
                         .codgItem(codg.trim())
                         .cnpjFornecedor(cnpj != null ? cnpj : "")
                         .dataApresentacao(dataApres.orElse(null))
+                        .tributo(trib != null ? trib.trim() : null)
                         .build());
             }
             linhas.sort(Comparator.comparing(ResumoNfLinhaDTO::getChave).thenComparingInt(ResumoNfLinhaDTO::getSeqItem));

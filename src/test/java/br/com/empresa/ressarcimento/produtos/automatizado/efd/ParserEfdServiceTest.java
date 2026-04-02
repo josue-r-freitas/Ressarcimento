@@ -18,9 +18,10 @@ class ParserEfdServiceTest {
     void carregaC100C170_0200_0220(@TempDir Path dir) throws Exception {
         String conteudo =
                 """
-                |0200|ITEM01|Produto integracao||
+                |0190|UN|Unidade|
+                |0200|ITEM01|Produto integracao|||UN|
                 |0220|CX|2,500000|
-                |C100|0|0|FORN|55|00|1|999|%s|
+                |C100|0|0|FORN|55|00|1|999|%s|01012024|
                 |C170|1|ITEM01|X|10|UN|
                 """
                         .formatted(CHAVE);
@@ -28,14 +29,15 @@ class ParserEfdServiceTest {
 
         EfdIndice indice = parser.carregarDiretorio(dir);
 
-        assertThat(indice.notaPorChave(CHAVE)).isPresent();
-        assertThat(indice.notaPorChave(CHAVE).flatMap(n -> n.findItem(1)))
+        assertThat(indice.notaEntradaPorChave(CHAVE).flatMap(n -> n.findItem(1)))
                 .hasValueSatisfying(c -> {
                     assertThat(c.codItem()).isEqualTo("ITEM01");
                     assertThat(c.unid()).isEqualTo("UN");
+                    assertThat(c.qtd()).isEqualByComparingTo(new BigDecimal("10"));
                 });
         assertThat(indice.infoItem("ITEM01")).hasValueSatisfying(i -> {
             assertThat(i.getDescrItem()).isEqualTo("Produto integracao");
+            assertThat(i.getUnidInv()).isEqualTo("UN");
             assertThat(i.getFatorConversao0220()).isEqualByComparingTo(new BigDecimal("2.5"));
         });
     }

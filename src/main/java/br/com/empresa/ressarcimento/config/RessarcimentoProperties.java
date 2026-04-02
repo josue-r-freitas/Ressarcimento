@@ -21,4 +21,10 @@ public class RessarcimentoProperties {
      * Diretório com XML de NF-e de entrada.
      */
     private String nfesDir = "C:\\Users\\josue\\OneDrive\\Documentos\\TrabalhosExtras\\Ressarcimento\\Processamento\\Entrada\\nfes";
+
+    /**
+     * Diretório com XML de NF-e de saída (Fluxo B).
+     */
+    private String nfesSaidaDir =
+            "C:\\Users\\josue\\OneDrive\\Documentos\\TrabalhosExtras\\Ressarcimento\\Processamento\\Entrada\\nfes-saida";
 }

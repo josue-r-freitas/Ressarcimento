@@ -5,6 +5,7 @@ import br.com.empresa.ressarcimento.planilhas.dto.ProdutoPlanilhaDTO;
 import br.com.empresa.ressarcimento.planilhas.dto.ResumoNfLinhaDTO;
 import br.com.empresa.ressarcimento.produtos.api.GerarPlanilhaAutomaticaRequest;
 import br.com.empresa.ressarcimento.produtos.api.LogGeracaoPlanilhaDTO;
+import br.com.empresa.ressarcimento.produtos.api.ResultadoGeracaoPlanilhaAutomatica;
 import br.com.empresa.ressarcimento.produtos.automatizado.domain.LogGeracaoPlanilha;
 import br.com.empresa.ressarcimento.produtos.automatizado.efd.C170Linha;
 import br.com.empresa.ressarcimento.produtos.automatizado.efd.EfdIndice;
@@ -48,15 +49,32 @@ public class ProdutoPlanilhaAutomaticaService {
     private final LogGeracaoPlanilhaRepository logRepository;
 
     @Transactional
-    public byte[] gerarPlanilhaAutomatica(GerarPlanilhaAutomaticaRequest req) throws IOException {
+    public ResultadoGeracaoPlanilhaAutomatica gerarPlanilhaAutomatica(GerarPlanilhaAutomaticaRequest req)
+            throws IOException {
         GerarPlanilhaAutomaticaRequest r = req != null ? req : new GerarPlanilhaAutomaticaRequest();
-        // Único ponto que apaga a tabela: importação manual de produtos não deve limpar estes logs.
-        logRepository.deleteAllInBatch();
         Path dirResumo = exigirDiretorio(properties.getResumoNotasDir(), "ressarcimento.resumo-notas-dir");
         Path dirEfd = exigirDiretorio(properties.getEfdsDir(), "ressarcimento.efds-dir");
         Path dirNfes = exigirDiretorio(properties.getNfesDir(), "ressarcimento.nfes-dir");
-
         Path arquivoResumo = resolverArquivoResumo(dirResumo, r.getAnoReferencia(), r.getMesReferencia(), r.getNomeArquivoResumo());
+        return gerarPlanilhaAutomaticaDeFontes(arquivoResumo, dirEfd, dirNfes, r);
+    }
+
+    /**
+     * Fluxo A a partir de arquivos já materializados no disco (ex.: upload multipart descompactado em diretório temporário).
+     */
+    @Transactional
+    public ResultadoGeracaoPlanilhaAutomatica gerarPlanilhaAutomaticaUpload(
+            Path arquivoResumo, Path dirEfd, Path dirNfes, GerarPlanilhaAutomaticaRequest req) throws IOException {
+        GerarPlanilhaAutomaticaRequest r = req != null ? req : new GerarPlanilhaAutomaticaRequest();
+        return gerarPlanilhaAutomaticaDeFontes(arquivoResumo, dirEfd, dirNfes, r);
+    }
+
+    /**
+     * Único ponto que apaga {@code log_geracao_planilha}; importação manual de produtos não deve limpar estes logs.
+     */
+    private ResultadoGeracaoPlanilhaAutomatica gerarPlanilhaAutomaticaDeFontes(
+            Path arquivoResumo, Path dirEfd, Path dirNfes, GerarPlanilhaAutomaticaRequest r) throws IOException {
+        logRepository.deleteAllInBatch();
         List<String> nomesArquivosEfd = listarNomesEfd(dirEfd);
         EfdIndice indice = parserEfdService.carregarDiretorio(dirEfd);
 
@@ -71,6 +89,8 @@ public class ProdutoPlanilhaAutomaticaService {
         LocalDateTime agora = LocalDateTime.now();
 
         Map<String, ProdutoPlanilhaDTO> dedup = new LinkedHashMap<>();
+        int rejeitadas = 0;
+        int montadasParaDedup = 0;
 
         for (ResumoNfLinhaDTO linha : linhasResumo) {
             String chave = linha.getChave();
@@ -78,6 +98,7 @@ public class ProdutoPlanilhaAutomaticaService {
             String origemLinha = arquivoResumo.getFileName() + ":linha " + linha.getNumeroLinhaPlanilha();
 
             if (chave.length() != 44 || !chave.chars().allMatch(Character::isDigit)) {
+                rejeitadas++;
                 logs.add(log(
                         TipoLogGeracaoPlanilha.DADO_INVALIDO,
                         chave.length() == 44 ? chave : null,
@@ -88,6 +109,7 @@ public class ProdutoPlanilhaAutomaticaService {
                 continue;
             }
             if (seq <= 0) {
+                rejeitadas++;
                 logs.add(log(
                         TipoLogGeracaoPlanilha.DADO_INVALIDO,
                         chave,
@@ -99,6 +121,7 @@ public class ProdutoPlanilhaAutomaticaService {
             }
             String cnpj = linha.getCnpjFornecedor();
             if (cnpj.length() != 14 || !cnpj.chars().allMatch(Character::isDigit)) {
+                rejeitadas++;
                 logs.add(log(
                         TipoLogGeracaoPlanilha.DADO_INVALIDO,
                         chave,
@@ -110,6 +133,7 @@ public class ProdutoPlanilhaAutomaticaService {
             }
             String codg = linha.getCodgItem();
             if (!StringUtils.hasText(codg)) {
+                rejeitadas++;
                 logs.add(log(
                         TipoLogGeracaoPlanilha.DADO_INVALIDO,
                         chave,
@@ -120,8 +144,9 @@ public class ProdutoPlanilhaAutomaticaService {
                 continue;
             }
 
-            var notaOpt = indice.notaPorChave(chave);
+            var notaOpt = indice.notaEntradaPorChave(chave);
             if (notaOpt.isEmpty()) {
+                rejeitadas++;
                 logs.add(log(
                         TipoLogGeracaoPlanilha.NOTA_NAO_ENCONTRADA_EFD,
                         chave,
@@ -133,6 +158,7 @@ public class ProdutoPlanilhaAutomaticaService {
             }
             var c170Opt = notaOpt.get().findItem(seq);
             if (c170Opt.isEmpty()) {
+                rejeitadas++;
                 logs.add(log(
                         TipoLogGeracaoPlanilha.ITEM_NAO_ENCONTRADO_NO_EFD,
                         chave,
@@ -146,6 +172,7 @@ public class ProdutoPlanilhaAutomaticaService {
             InfoItemSped info0200 =
                     indice.infoItem(c170.codItem()).orElse(null);
             if (info0200 == null || !StringUtils.hasText(info0200.getDescrItem())) {
+                rejeitadas++;
                 logs.add(log(
                         TipoLogGeracaoPlanilha.DADO_INVALIDO,
                         chave,
@@ -161,6 +188,22 @@ public class ProdutoPlanilhaAutomaticaService {
                 fator = info0200.getFatorConversao0220().setScale(6, RoundingMode.HALF_UP);
             } else {
                 fator = FATOR_PADRAO;
+            }
+
+            String unidadeInternaEfd;
+            if (StringUtils.hasText(info0200.getUnidInv())) {
+                unidadeInternaEfd = info0200.getUnidInv().trim();
+            } else {
+                unidadeInternaEfd = c170.unid();
+            }
+            if (StringUtils.hasText(unidadeInternaEfd) && !indice.existeUnidade0190(unidadeInternaEfd)) {
+                logs.add(log(
+                        TipoLogGeracaoPlanilha.DADO_INVALIDO,
+                        chave,
+                        seq,
+                        origemLinha,
+                        "UNID_INV '" + unidadeInternaEfd + "' não encontrada no registro 0190 da EFD.",
+                        agora));
             }
 
             String unidadeFornecedor = "";
@@ -235,7 +278,7 @@ public class ProdutoPlanilhaAutomaticaService {
                     .numeroLinha(linha.getNumeroLinhaPlanilha())
                     .codInternoProduto(c170.codItem())
                     .descricaoProduto(descr)
-                    .unidadeInternaProduto(c170.unid())
+                    .unidadeInternaProduto(unidadeInternaEfd)
                     .fatorConversao(fator)
                     .cnpjFornecedor(cnpj)
                     .codProdFornecedor(codg.trim())
@@ -250,6 +293,7 @@ public class ProdutoPlanilhaAutomaticaService {
                     dto.getUnidadeInternaProduto(),
                     dto.getUnidadeProdutoFornecedor());
             dedup.putIfAbsent(chaveDedup, dto);
+            montadasParaDedup++;
         }
 
         if (!logs.isEmpty()) {
@@ -257,7 +301,20 @@ public class ProdutoPlanilhaAutomaticaService {
         }
 
         List<ProdutoPlanilhaDTO> saida = new ArrayList<>(dedup.values());
-        return escritorPlanilhaProdutosExcel.escrever(saida);
+        int produtosUnicos = saida.size();
+        int colapsadasDedup = Math.max(0, montadasParaDedup - produtosUnicos);
+
+        byte[] xlsx = escritorPlanilhaProdutosExcel.escrever(saida);
+        return ResultadoGeracaoPlanilhaAutomatica.builder()
+                .planilhaXlsx(xlsx)
+                .totalProdutosGerados(produtosUnicos)
+                .totalLinhasResumo(linhasResumo.size())
+                .totalLogs(logs.size())
+                .totalLinhasIgnoradasTributo(0)
+                .totalLinhasRejeitadas(rejeitadas)
+                .totalLinhasMontadasParaDedup(montadasParaDedup)
+                .totalLinhasColapsadasNaDedup(colapsadasDedup)
+                .build();
     }
 
     @Transactional(readOnly = true)

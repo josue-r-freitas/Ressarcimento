@@ -23,4 +23,8 @@ public interface ProdutoMatrizRepository extends JpaRepository<ProdutoMatriz, Lo
     boolean existsByCodInternoProduto(String codInternoProduto);
 
     List<ProdutoMatriz> findByCodInternoProduto(String codInternoProduto);
+
+    Optional<ProdutoMatriz> findFirstByCodInternoProduto(String codInternoProduto);
+
+    List<ProdutoMatriz> findByCodProdFornecedor(String codProdFornecedor);
 }

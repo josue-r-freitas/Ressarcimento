@@ -10,6 +10,9 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -46,4 +49,12 @@ public class ItemNotaSaida {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "nota_entrada_id")
     private NotaEntrada notaEntrada;
+
+    /**
+     * Fluxo B: todas as chaves de NF-e de entrada consumidas por FIFO para este item (não persistido; usado em
+     * {@code GeradorXmlPedidos} para montar {@code listaNFeEntrada}).
+     */
+    @Transient
+    @Builder.Default
+    private Set<String> chavesNfeEntradaConsumidas = new LinkedHashSet<>();
 }

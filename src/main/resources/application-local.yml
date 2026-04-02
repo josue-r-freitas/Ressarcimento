@@ -1,0 +1,10 @@
+# Perfil "local": SQL Server instalado no Windows.
+# Por defeito: instancia SQLEXPRESS (via instanceName) + utilizador app_elementar (como no setup original).
+# OBRIGATORIO: defina RESSARCIMENTO_DB_PASSWORD no .env (nao commitar). Para usar "sa", defina RESSARCIMENTO_DB_USERNAME=sa.
+#
+# Instancia predefinida (MSSQLSERVER) na porta 1433: ajuste RESSARCIMENTO_DB_URL no .env.
+spring:
+  datasource:
+    url: ${RESSARCIMENTO_DB_URL:jdbc:sqlserver://localhost;instanceName=SQLEXPRESS;databaseName=ressarcimento;encrypt=false;trustServerCertificate=true;loginTimeout=30}
+    username: ${RESSARCIMENTO_DB_USERNAME:app_elementar}
+    password: ${RESSARCIMENTO_DB_PASSWORD:}

@@ -15,4 +15,6 @@ public class ResumoNfLinhaDTO {
     private String cnpjFornecedor;
     /** Preenchida conforme coluna DATA APRES. (usada para filtro e checagem de período). */
     private LocalDate dataApresentacao;
+    /** Coluna TRIBUTO do resumonf (ex.: 1380 ICMS-ST a ressarcir). */
+    private String tributo;
 }

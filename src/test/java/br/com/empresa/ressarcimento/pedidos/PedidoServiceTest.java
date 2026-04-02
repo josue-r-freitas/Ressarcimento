@@ -2,6 +2,7 @@ package br.com.empresa.ressarcimento.pedidos;
 
 import br.com.empresa.ressarcimento.declarante.DeclaranteService;
 import br.com.empresa.ressarcimento.declarante.domain.Declarante;
+import br.com.empresa.ressarcimento.pedidos.domain.NotaSaida;
 import br.com.empresa.ressarcimento.produtos.ProdutoMatrizRepository;
 import br.com.empresa.ressarcimento.shared.exception.DeclaranteNaoEncontradoException;
 import jakarta.xml.bind.JAXBException;
@@ -54,9 +55,11 @@ class PedidoServiceTest {
         Declarante decl = Declarante.builder().id(1L).cnpjRaiz("12345678").ieContribuinteDeclarante("12345678")
                 .razaoSocial("Teste").nomeResponsavel("A").foneResponsavel("92999999999").emailResponsavel("a@b.com").build();
         when(declaranteService.getEntidadeOuLanca()).thenReturn(decl);
+        NotaSaida nota = NotaSaida.builder().chaveNFe("35200108779811000191550010000000011000000018").build();
         when(notaSaidaRepository.findByDeclaranteIdAndAnoPeriodoReferenciaAndMesPeriodoReferencia(1L, "2024", "01"))
-                .thenReturn(List.of());
-        when(geradorXml.gerar(decl, "2024", "01", List.of())).thenReturn("<?xml version=\"1.0\"?><enviOperacaoRessarcimento/>");
+                .thenReturn(List.of(nota));
+        when(geradorXml.gerar(decl, "2024", "01", List.of(nota)))
+                .thenReturn("<?xml version=\"1.0\"?><enviOperacaoRessarcimento/>");
         when(arquivoPedidoRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         byte[] result = service.gerarXml("2024", "01");

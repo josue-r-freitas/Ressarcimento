@@ -145,12 +145,42 @@ public class PedidoService {
         return s;
     }
 
+    /** Alinha com CHAR(2) no banco e com planilhas que usam 01–12. */
+    private static String normalizarMesDoisDigitos(String mes) {
+        if (mes == null) {
+            return "";
+        }
+        String t = mes.trim();
+        if (t.isEmpty()) {
+            return t;
+        }
+        try {
+            int m = Integer.parseInt(t);
+            if (m >= 1 && m <= 9) {
+                return "0" + m;
+            }
+            if (m >= 10 && m <= 12) {
+                return String.valueOf(m);
+            }
+        } catch (NumberFormatException ignored) {
+        }
+        return t;
+    }
+
     @Transactional(readOnly = true)
     public Page<NotaSaidaDTO> listar(Pageable pageable, String ano, String mes) {
         Declarante declarante = declaranteService.getEntidadeOuLanca();
         if (ano != null && !ano.isBlank() && mes != null && !mes.isBlank()) {
-            return notaSaidaRepository.findByDeclaranteIdAndAnoPeriodoReferenciaAndMesPeriodoReferencia(
-                    declarante.getId(), ano, mes, pageable).map(this::toDTO);
+            String anoT = ano.trim();
+            String mesNorm = normalizarMesDoisDigitos(mes);
+            Page<NotaSaida> page =
+                    notaSaidaRepository.findByDeclaranteIdAndAnoPeriodoReferenciaAndMesPeriodoReferencia(
+                            declarante.getId(), anoT, mesNorm, pageable);
+            if (page.isEmpty() && !mesNorm.equals(mes.trim())) {
+                page = notaSaidaRepository.findByDeclaranteIdAndAnoPeriodoReferenciaAndMesPeriodoReferencia(
+                        declarante.getId(), anoT, mes.trim(), pageable);
+            }
+            return page.map(this::toDTO);
         }
         return notaSaidaRepository.findByDeclaranteId(declarante.getId(), pageable).map(this::toDTO);
     }
@@ -158,13 +188,30 @@ public class PedidoService {
     @Transactional
     public byte[] gerarXml(String anoReferencia, String mesReferencia) throws JAXBException {
         Declarante declarante = declaranteService.getEntidadeOuLanca();
-        List<NotaSaida> notas = notaSaidaRepository.findByDeclaranteIdAndAnoPeriodoReferenciaAndMesPeriodoReferencia(
-                declarante.getId(), anoReferencia, mesReferencia);
-        String xml = geradorXml.gerar(declarante, anoReferencia, mesReferencia, notas);
+        String ano = anoReferencia != null ? anoReferencia.trim() : "";
+        String mesNorm = normalizarMesDoisDigitos(mesReferencia);
+        List<NotaSaida> notas =
+                notaSaidaRepository.findByDeclaranteIdAndAnoPeriodoReferenciaAndMesPeriodoReferencia(
+                        declarante.getId(), ano, mesNorm);
+        if (notas.isEmpty() && mesReferencia != null && !mesNorm.equals(mesReferencia.trim())) {
+            notas = notaSaidaRepository.findByDeclaranteIdAndAnoPeriodoReferenciaAndMesPeriodoReferencia(
+                    declarante.getId(), ano, mesReferencia.trim());
+        }
+        if (notas.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Não há NF-e de saída com itens importados para o período "
+                            + ano
+                            + "/"
+                            + mesNorm
+                            + ". "
+                            + "Em «Pedidos — importar», envie primeiro a planilha de operações com o mesmo ano/mês; "
+                            + "use mês com dois dígitos (ex.: 01) se ainda não aparecer dados.");
+        }
+        String xml = geradorXml.gerar(declarante, ano, mesNorm, notas);
         ArquivoPedido arquivo = ArquivoPedido.builder()
                 .declarante(declarante)
-                .anoReferencia(anoReferencia)
-                .mesReferencia(mesReferencia)
+                .anoReferencia(ano)
+                .mesReferencia(mesNorm)
                 .dataGeracao(LocalDateTime.now())
                 .status("GERADO")
                 .xmlContent(xml)

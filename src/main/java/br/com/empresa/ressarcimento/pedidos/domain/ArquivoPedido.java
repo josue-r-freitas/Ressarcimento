@@ -1,6 +1,7 @@
 package br.com.empresa.ressarcimento.pedidos.domain;
 
 import br.com.empresa.ressarcimento.declarante.domain.Declarante;
+import br.com.empresa.ressarcimento.pedidos.fluxo.ExecucaoFluxoPedido;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -51,4 +52,8 @@ public class ArquivoPedido {
 
     @Column(name = "xml_content", columnDefinition = "NVARCHAR(MAX)")
     private String xmlContent;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "execucao_fluxo_id")
+    private ExecucaoFluxoPedido execucaoFluxoPedido;
 }

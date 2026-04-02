@@ -3,16 +3,27 @@ package br.com.empresa.ressarcimento.produtos;
 import br.com.empresa.ressarcimento.produtos.api.ArquivoProdutosDTO;
 import br.com.empresa.ressarcimento.produtos.api.GerarPlanilhaAutomaticaRequest;
 import br.com.empresa.ressarcimento.produtos.api.LogGeracaoPlanilhaDTO;
+import br.com.empresa.ressarcimento.produtos.api.PlanilhaAutomaticaMetricasHeaders;
 import br.com.empresa.ressarcimento.produtos.api.ProdutoDTO;
+import br.com.empresa.ressarcimento.produtos.api.ResultadoGeracaoPlanilhaAutomatica;
 import br.com.empresa.ressarcimento.produtos.automatizado.ProdutoPlanilhaAutomaticaService;
 import br.com.empresa.ressarcimento.shared.api.ResultadoImportacaoDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.xml.bind.JAXBException;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -27,6 +38,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -47,15 +59,22 @@ public class ProdutoController {
 
     private static final String CONTENT_DISPOSITION_PLANILHA_ZIP = "attachment; filename=\"planilha_produtos.zip\"";
 
+    private static final String CONTENT_DISPOSITION_FLUXO_A_UPLOAD_ZIP =
+            "attachment; filename=\"fluxo_a_resultado.zip\"";
+
     private final ProdutoService service;
     private final ProdutoPlanilhaAutomaticaService planilhaAutomaticaService;
+    private final ObjectMapper objectMapper;
 
-    private static ResponseEntity<byte[]> respostaDownloadPlanilhaProdutos(byte[] xlsx) {
+    private static ResponseEntity<byte[]> respostaDownloadPlanilhaProdutos(ResultadoGeracaoPlanilhaAutomatica resultado) {
+        HttpHeaders metricas = new HttpHeaders();
+        PlanilhaAutomaticaMetricasHeaders.addTo(metricas, resultado);
         return ResponseEntity.ok()
+                .headers(metricas)
                 .header(HttpHeaders.CONTENT_DISPOSITION, CONTENT_DISPOSITION_PLANILHA_XLSX)
                 .contentType(MediaType.parseMediaType(
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
-                .body(xlsx);
+                .body(resultado.getPlanilhaXlsx());
     }
 
     private ResponseEntity<byte[]> gerarPlanilhaAutomaticaResponse(
@@ -90,9 +109,12 @@ public class ProdutoController {
                 .mesReferencia(mesReferencia)
                 .nomeArquivoResumo(nomeArquivoResumo)
                 .build();
-        byte[] xlsx = planilhaAutomaticaService.gerarPlanilhaAutomatica(body);
-        byte[] zip = zipComPlanilhaProdutos(xlsx);
+        ResultadoGeracaoPlanilhaAutomatica resultado = planilhaAutomaticaService.gerarPlanilhaAutomatica(body);
+        byte[] zip = zipComPlanilhaProdutos(resultado.getPlanilhaXlsx());
+        HttpHeaders metricas = new HttpHeaders();
+        PlanilhaAutomaticaMetricasHeaders.addTo(metricas, resultado);
         return ResponseEntity.ok()
+                .headers(metricas)
                 .header(HttpHeaders.CONTENT_DISPOSITION, CONTENT_DISPOSITION_PLANILHA_ZIP)
                 .contentType(MediaType.parseMediaType("application/zip"))
                 .body(zip);
@@ -189,8 +211,113 @@ public class ProdutoController {
     @PostMapping("/gerar-planilha-automatica")
     public ResponseEntity<byte[]> gerarPlanilhaAutomatica(
             @RequestBody(required = false) GerarPlanilhaAutomaticaRequest body) throws IOException {
-        byte[] xlsx = planilhaAutomaticaService.gerarPlanilhaAutomatica(body);
-        return respostaDownloadPlanilhaProdutos(xlsx);
+        return respostaDownloadPlanilhaProdutos(planilhaAutomaticaService.gerarPlanilhaAutomatica(body));
+    }
+
+    @Operation(
+            summary = "Fluxo A com upload",
+            description =
+                    "Recebe EFD (.txt), resumonf (.xlsx) e opcionalmente ZIP de XMLs de NF-e de entrada. "
+                            + "Retorna ZIP com planilha_produtos.xlsx e relatorio.json (totais).")
+    @PostMapping(value = "/gerar-planilha-automatica-upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<byte[]> gerarPlanilhaAutomaticaUpload(
+            @RequestPart("efd") MultipartFile arquivoEfd,
+            @RequestPart("resumo") MultipartFile arquivoResumo,
+            @RequestPart(value = "xmlsZip", required = false) MultipartFile xmlsZip,
+            @RequestParam(required = false) Integer anoReferencia,
+            @RequestParam(required = false) Integer mesReferencia)
+            throws Exception {
+        if (arquivoEfd.isEmpty() || arquivoResumo.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+        Path tmp = Files.createTempDirectory("fluxo-a-upload");
+        try {
+            Path dirEfd = tmp.resolve("efd");
+            Path dirNfes = tmp.resolve("nfes");
+            Files.createDirectories(dirEfd);
+            Files.createDirectories(dirNfes);
+            String nomeEfd = nomeSeguro(arquivoEfd.getOriginalFilename(), "efd.txt");
+            arquivoEfd.transferTo(dirEfd.resolve(nomeEfd).toFile());
+            Path resumoPath = tmp.resolve("resumo_upload.xlsx");
+            arquivoResumo.transferTo(resumoPath.toFile());
+            if (xmlsZip != null && !xmlsZip.isEmpty()) {
+                try (InputStream in = xmlsZip.getInputStream();
+                        ZipInputStream zin = new ZipInputStream(in)) {
+                    ZipEntry entry;
+                    while ((entry = zin.getNextEntry()) != null) {
+                        if (entry.isDirectory()) {
+                            continue;
+                        }
+                        String name = entry.getName();
+                        if (!name.toLowerCase().endsWith(".xml")) {
+                            continue;
+                        }
+                        Path dest = dirNfes.resolve(Path.of(name).getFileName());
+                        Files.copy(zin, dest, StandardCopyOption.REPLACE_EXISTING);
+                    }
+                }
+            }
+            GerarPlanilhaAutomaticaRequest req = GerarPlanilhaAutomaticaRequest.builder()
+                    .anoReferencia(anoReferencia)
+                    .mesReferencia(mesReferencia)
+                    .build();
+            ResultadoGeracaoPlanilhaAutomatica res =
+                    planilhaAutomaticaService.gerarPlanilhaAutomaticaUpload(resumoPath, dirEfd, dirNfes, req);
+            Map<String, Object> rel = new LinkedHashMap<>();
+            rel.put("totalProdutosGerados", res.getTotalProdutosGerados());
+            rel.put("totalLinhasResumo", res.getTotalLinhasResumo());
+            rel.put("totalLogs", res.getTotalLogs());
+            rel.put("totalLinhasIgnoradasTributo", res.getTotalLinhasIgnoradasTributo());
+            rel.put("totalLinhasRejeitadas", res.getTotalLinhasRejeitadas());
+            rel.put("totalLinhasMontadasParaDedup", res.getTotalLinhasMontadasParaDedup());
+            rel.put("totalLinhasColapsadasNaDedup", res.getTotalLinhasColapsadasNaDedup());
+            byte[] json = objectMapper.writeValueAsBytes(rel);
+            byte[] zip = zipDoisArquivos(NOME_ARQUIVO_DOWNLOAD_PLANILHA_PRODUTOS, res.getPlanilhaXlsx(), "relatorio.json", json);
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, CONTENT_DISPOSITION_FLUXO_A_UPLOAD_ZIP)
+                    .contentType(MediaType.parseMediaType("application/zip"))
+                    .body(zip);
+        } finally {
+            apagarRecursivo(tmp);
+        }
+    }
+
+    private static String nomeSeguro(String original, String padrao) {
+        if (original == null || original.isBlank()) {
+            return padrao;
+        }
+        String n = original.trim();
+        if (n.contains("..") || n.contains("/") || n.contains("\\")) {
+            return padrao;
+        }
+        return n;
+    }
+
+    private static void apagarRecursivo(Path root) throws IOException {
+        if (root == null || !Files.exists(root)) {
+            return;
+        }
+        try (var walk = Files.walk(root)) {
+            List<Path> paths = walk.sorted(Comparator.reverseOrder()).toList();
+            for (Path p : paths) {
+                Files.deleteIfExists(p);
+            }
+        }
+    }
+
+    private static byte[] zipDoisArquivos(String nome1, byte[] bytes1, String nome2, byte[] bytes2)
+            throws IOException {
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                ZipOutputStream zos = new ZipOutputStream(baos)) {
+            zos.putNextEntry(new ZipEntry(nome1));
+            zos.write(bytes1);
+            zos.closeEntry();
+            zos.putNextEntry(new ZipEntry(nome2));
+            zos.write(bytes2);
+            zos.closeEntry();
+            zos.finish();
+            return baos.toByteArray();
+        }
     }
 
     @Operation(summary = "Lista logs de inconsistências da geração automática da Planilha Produtos")

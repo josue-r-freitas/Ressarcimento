@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- edited with XMLSpy v2008 (http://www.altova.com) by Rodrigo (Pessoal) -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns="http://www.sefaz.am.gov.br/ressarcimento" targetNamespace="http://www.sefaz.am.gov.br/ressarcimento" elementFormDefault="qualified" attributeFormDefault="unqualified">
+	<xs:include schemaLocation="tiposBasicosRessarcimento_v2.00.xsd"/>
+	<xs:complexType name="TDadosDeclarante">
+		<xs:sequence>
+			<xs:element name="cnpjRaiz" type="TCnpjRaiz">
+				<xs:annotation>
+					<xs:documentation>Raiz do CNPJ - primeiras 8 posições numéricas do CNPJ.</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="ieContribuinteDeclarante" type="TIe">
+				<xs:annotation>
+					<xs:documentation>Inscrição Estadual do contribuinte.</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="razaoSocial" type="TTextoGeral">
+				<xs:annotation>
+					<xs:documentation>Razão Social do declarante.</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="nomeResponsavel" type="TTextoGeral">
+				<xs:annotation>
+					<xs:documentation>Nome do responsável pelo preenchimento das informações.</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="foneResponsavel" type="TFoneContato">
+				<xs:annotation>
+					<xs:documentation>Telefone do responsável pelo preenchimento das informações.</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="emailResponsavel" type="TTextoGeral">
+				<xs:annotation>
+					<xs:documentation>E-mail do responsável pelo preenchimento das informações.</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="anoPeriodoReferencia" type="Tano">
+				<xs:annotation>
+					<xs:documentation>Ano do período de ocorrência das operações. </xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:element name="mesPeriodoReferencia" type="Tmes">
+				<xs:annotation>
+					<xs:documentation>Mês do período de ocorrência das operações.</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+		</xs:sequence>
+	</xs:complexType>
+	<xs:complexType name="TOperacaoRessarcimento">
+		<xs:annotation>
+			<xs:documentation>Tipo de definição do leiaute do arquivo de pedido de ressarcimento.</xs:documentation>
+		</xs:annotation>
+		<xs:sequence>
+			<xs:element name="versao" type="TVersao">
+				<xs:annotation>
+					<xs:documentation>Número da versão de esquema XML do arquivo.</xs:documentation>
+				</xs:annotation>
+			</xs:element>
+			<xs:choice minOccurs="1" maxOccurs="1">
+				<xs:element name="dadosDeclaracao" type="TDadosDeclarante"/>
+				<xs:element name="dadosDeclarante" type="TDadosDeclarante"/>
+			</xs:choice>
+			<xs:element name="listaOperacoes">
+				<xs:complexType>
+					<xs:sequence>
+						<xs:element name="operacao" maxOccurs="unbounded">
+							<xs:complexType>
+								<xs:sequence>
+									<xs:element name="chaveNFe" type="TChNFe">
+										<xs:annotation>
+											<xs:documentation>Chave da NF-e onde estão os itens que serão alvo de pedido de ressarcimento.</xs:documentation>
+										</xs:annotation>
+									</xs:element>
+									<xs:element name="listaItens">
+										<xs:complexType>
+											<xs:sequence>
+												<xs:element name="item" maxOccurs="990">
+													<xs:complexType>
+														<xs:sequence>
+															<xs:element name="codInternoProduto" type="TCodProduto">
+																<xs:annotation>
+																	<xs:documentation>Código interno do produto cadastrado nos sistemas do declarante.</xs:documentation>
+																</xs:annotation>
+															</xs:element>
+															<xs:element name="numItemNFe" type="xs:integer">
+																<xs:annotation>
+																	<xs:documentation>Número do item da NF-e para ressarcimento.</xs:documentation>
+																</xs:annotation>
+															</xs:element>
+															<xs:element name="chaveNFeEntrada" type="TChNFe" minOccurs="0">
+																<xs:annotation>
+																	<xs:documentation>Chave da NF-e de Entrada onde estão os itens que serão alvo de pedido de ressarcimento.</xs:documentation>
+																</xs:annotation>
+															</xs:element>
+														</xs:sequence>
+													</xs:complexType>
+												</xs:element>
+											</xs:sequence>
+										</xs:complexType>
+									</xs:element>
+								</xs:sequence>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element	name="listaNFeEntrada" minOccurs="0">
+				<xs:complexType>
+					<xs:sequence>
+						<xs:element	name="nfeEntrada" maxOccurs="unbounded">
+							<xs:complexType>
+								<xs:sequence>
+									<xs:element name="chaveNFeEntrada" type="TChNFe">
+										<xs:annotation>
+											<xs:documentation>Chave da NF-e de Entrada onde estão os itens que serão alvo de pedido de ressarcimento.</xs:documentation>
+										</xs:annotation>
+									</xs:element>
+									<xs:element name="chaveCTeEntrada" type="TChCTe" minOccurs="0">
+										<xs:annotation>
+											<xs:documentation>Chave da NF-e de Entrada onde estão os itens que serão alvo de pedido de ressarcimento.</xs:documentation>
+										</xs:annotation>
+									</xs:element>
+									<xs:element name="chaveMDFeEntrada" type="TChMDFe" minOccurs="0">
+										<xs:annotation>
+											<xs:documentation>Chave da NF-e de Entrada onde estão os itens que serão alvo de pedido de ressarcimento.</xs:documentation>
+										</xs:annotation>
+									</xs:element>
+								</xs:sequence>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+		</xs:sequence>
+	</xs:complexType>
+</xs:schema>

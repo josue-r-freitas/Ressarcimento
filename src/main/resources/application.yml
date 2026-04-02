@@ -1,10 +1,10 @@
+# Variáveis: RESSARCIMENTO_DB_URL, RESSARCIMENTO_DB_USERNAME, RESSARCIMENTO_DB_PASSWORD
 spring:
   datasource:
-    url: jdbc:sqlserver://DESKTOP-P13INJM;instanceName=SQLEXPRESS;databaseName=ressarcimento;encrypt=false
+    url: ${RESSARCIMENTO_DB_URL:jdbc:sqlserver://localhost;databaseName=ressarcimento;encrypt=false;trustServerCertificate=true;loginTimeout=30}
     driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
-    username: app_elementar
-    # Para outro ambiente, use variáveis: RESSARCIMENTO_DB_USERNAME e RESSARCIMENTO_DB_PASSWORD
-    password: '!M19101993'
+    username: ${RESSARCIMENTO_DB_USERNAME:sa}
+    password: ${RESSARCIMENTO_DB_PASSWORD:}
   jpa:
     database-platform: org.hibernate.dialect.SQLServerDialect
     hibernate:
@@ -23,6 +23,8 @@ logging:
   level:
     root: INFO
     br.com.empresa.ressarcimento: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{idExecucao:-}] %logger{36} - %msg%n"
 
 # Swagger/OpenAPI (springdoc)
 springdoc:
@@ -35,6 +37,7 @@ springdoc:
 # Pastas para geração automática da Planilha Produtos (resumonf + EFD + XML NF-e).
 # Override por ambiente: RESSARCIMENTO_RESUMO_NOTAS_DIR, RESSARCIMENTO_EFDS_DIR, RESSARCIMENTO_NFES_DIR.
 ressarcimento:
-  resumo-notas-dir: ${RESSARCIMENTO_RESUMO_NOTAS_DIR:C:/Users/josue/OneDrive/Documentos/TrabalhosExtras/Ressarcimento/Processamento/Entrada/resumo}
+  resumo-notas-dir: ${RESSARCIMENTO_RESUMO_NOTAS_DIR:C:/Users/josue/OneDrive/Documentos/TrabalhosExtras/Ressarcimento/Processamento/Entrada/resumo-notas}
   efds-dir: ${RESSARCIMENTO_EFDS_DIR:C:/Users/josue/OneDrive/Documentos/TrabalhosExtras/Ressarcimento/Processamento/Entrada/efds}
-  nfes-dir: ${RESSARCIMENTO_NFES_DIR:C:/Users/josue/OneDrive/Documentos/TrabalhosExtras/Ressarcimento/Processamento/Entrada/nfes}
+  nfes-dir: ${RESSARCIMENTO_NFES_DIR:C:/Users/josue/OneDrive/Documentos/TrabalhosExtras/Ressarcimento/Processamento/Entrada/nfes-entrada}
+  nfes-saida-dir: ${RESSARCIMENTO_NFES_SAIDA_DIR:C:/Users/josue/OneDrive/Documentos/TrabalhosExtras/Ressarcimento/Processamento/Entrada/nfes-saida}

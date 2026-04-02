@@ -7,7 +7,7 @@
 <div th:replace="~{fragments/nav :: nav}"></div>
 <main class="container pb-5">
     <h1 class="h3 mb-3">Interface web</h1>
-    <p class="text-muted">Fluxo sugerido: cadastrar declarante → importar produtos → gerar XML de produtos → importar pedidos → gerar XML de pedidos.</p>
+    <p class="text-muted">Fluxo sugerido: cadastrar declarante → importar produtos → gerar XML de produtos → importar pedidos → gerar XML de pedidos (manual) ou usar <strong>Pedidos — gerar XML automático (Fluxo B)</strong> com EFD/XML nas pastas configuradas.</p>
     <ul class="list-group list-group-flush shadow-sm rounded border bg-white">
         <li class="list-group-item"><a th:href="@{/ui/declarante}">Declarante</a></li>
         <li class="list-group-item"><a th:href="@{/ui/produtos}">Produtos — importar planilha</a></li>
@@ -19,6 +19,7 @@
         <li class="list-group-item"><a th:href="@{/ui/pedidos}">Pedidos — importar</a></li>
         <li class="list-group-item"><a th:href="@{/ui/pedidos/lista}">Pedidos — lista</a></li>
         <li class="list-group-item"><a th:href="@{/ui/pedidos/gerar-xml}">Pedidos — gerar XML</a></li>
+        <li class="list-group-item"><a th:href="@{/ui/pedidos/gerar-automatico}">Pedidos — gerar XML automático (Fluxo B)</a></li>
         <li class="list-group-item"><a th:href="@{/ui/pedidos/historico}">Pedidos — histórico</a></li>
         <li class="list-group-item"><a href="/swagger-ui.html" target="_blank" rel="noopener">Documentação da API (Swagger)</a></li>
     </ul>

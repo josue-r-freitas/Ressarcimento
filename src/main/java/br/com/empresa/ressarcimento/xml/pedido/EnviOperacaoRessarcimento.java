@@ -11,7 +11,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-@XmlRootElement(name = "enviOperacaoRessarcimento")
+@XmlRootElement(
+        name = "enviOperacaoRessarcimento",
+        namespace = "http://www.sefaz.am.gov.br/ressarcimento")
 @XmlAccessorType(XmlAccessType.FIELD)
 @Data
 @NoArgsConstructor
@@ -28,6 +30,13 @@ public class EnviOperacaoRessarcimento {
     @XmlElement(name = "listaOperacoes", required = true)
     @Builder.Default
     private ListaOperacoes listaOperacoes = new ListaOperacoes();
+
+    /**
+     * No XSD v2.00 oficial da SEFAZ/AM, {@code listaNFeEntrada} é filho do elemento raiz (após {@code listaOperacoes}),
+     * não de cada {@code operacao}.
+     */
+    @XmlElement(name = "listaNFeEntrada")
+    private ListaNFeEntrada listaNFeEntrada;
 
     @XmlAccessorType(XmlAccessType.FIELD)
     @Data
@@ -74,8 +83,6 @@ public class EnviOperacaoRessarcimento {
         private String chaveNFe;
         @XmlElement(name = "listaItens")
         private ListaItens listaItens;
-        @XmlElement(name = "listaNFeEntrada")
-        private ListaNFeEntrada listaNFeEntrada;
     }
 
     @XmlAccessorType(XmlAccessType.FIELD)
@@ -89,6 +96,12 @@ public class EnviOperacaoRessarcimento {
         private List<ItemXml> itens = new ArrayList<>();
     }
 
+    /**
+     * Item da NF-e de saída no pedido de ressarcimento (versão 2.00).
+     * <p>Não inclui {@code chaveNFeEntrada}: o manual SEFAZ/AM determina que as chaves de NF-e de entrada devem
+     * constar <strong>apenas</strong> em {@code listaNFeEntrada}, nunca dentro de {@code listaItens/item},
+     * para evitar redundância e inconsistência no arquivo enviado ao DT-e.
+     */
     @XmlAccessorType(XmlAccessType.FIELD)
     @Data
     @NoArgsConstructor
@@ -99,8 +112,6 @@ public class EnviOperacaoRessarcimento {
         private String codInternoProduto;
         @XmlElement(name = "numItemNFe")
         private String numItemNFe;
-        @XmlElement(name = "chaveNFeEntrada")
-        private String chaveNFeEntrada; // opcional - será null para omitir tag
     }
 
     @XmlAccessorType(XmlAccessType.FIELD)

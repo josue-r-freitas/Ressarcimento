@@ -5,7 +5,9 @@
 <div th:replace="~{fragments/nav :: nav}"></div>
 <main class="container pb-5">
     <h1 class="h4 mb-3" th:text="${pageTitle}">Gerar XML</h1>
-    <p class="text-muted">Informe o ano e o mês de referência (mesmo formato usado na API).</p>
+    <div th:if="${errorMessage}" class="alert alert-warning" th:text="${errorMessage}">Erro</div>
+    <p class="text-muted">O XML é montado a partir das <strong>operações já importadas no banco</strong> (NF-e de saída e itens). Antes, use <a th:href="@{/ui/pedidos}">Pedidos — importar</a> com a planilha de operações do mesmo ano/mês.</p>
+    <p class="text-muted small">Mês pode ser <code>1</code> ou <code>01</code>. Ano com quatro dígitos (ex.: 2024).</p>
     <form th:action="@{/ui/pedidos/gerar-xml}" method="post" class="card shadow-sm">
         <div class="card-body row g-3">
             <div class="col-md-2">

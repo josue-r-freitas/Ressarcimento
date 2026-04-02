@@ -1,7 +1,12 @@
 package br.com.empresa.ressarcimento.pedidos;
 
 import br.com.empresa.ressarcimento.pedidos.api.ArquivoPedidoDTO;
+import br.com.empresa.ressarcimento.pedidos.api.ExecucaoFluxoPedidoResumoDTO;
+import br.com.empresa.ressarcimento.pedidos.api.GerarPedidoAutomaticoRequest;
+import br.com.empresa.ressarcimento.pedidos.api.GerarPedidoAutomaticoResponse;
 import br.com.empresa.ressarcimento.pedidos.api.NotaSaidaDTO;
+import br.com.empresa.ressarcimento.pedidos.api.RastreabilidadeFluxoDTO;
+import br.com.empresa.ressarcimento.pedidos.fluxo.FluxoPedidoAutomaticoService;
 import br.com.empresa.ressarcimento.shared.api.ResultadoImportacaoDTO;
 import jakarta.xml.bind.JAXBException;
 import java.io.IOException;
@@ -13,9 +18,11 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -27,6 +34,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class PedidoController {
 
     private final PedidoService service;
+    private final FluxoPedidoAutomaticoService fluxoPedidoAutomaticoService;
 
     @PostMapping(value = "/importar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ResultadoImportacaoDTO> importar(@RequestParam("arquivo") MultipartFile arquivo)
@@ -75,5 +83,22 @@ public class PedidoController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=enviOperacaoRessarcimento_" + id + ".xml")
                 .contentType(MediaType.APPLICATION_XML)
                 .body(xml);
+    }
+
+    @PostMapping("/gerar-automatico")
+    public ResponseEntity<GerarPedidoAutomaticoResponse> gerarAutomatico(
+            @Valid @RequestBody GerarPedidoAutomaticoRequest body) throws Exception {
+        GerarPedidoAutomaticoResponse resp = fluxoPedidoAutomaticoService.gerarAutomatico(body.getAno(), body.getMes());
+        return ResponseEntity.ok(resp);
+    }
+
+    @GetMapping("/execucoes")
+    public ResponseEntity<Page<ExecucaoFluxoPedidoResumoDTO>> listarExecucoes(Pageable pageable) {
+        return ResponseEntity.ok(fluxoPedidoAutomaticoService.listarExecucoes(pageable));
+    }
+
+    @GetMapping("/rastreabilidade/{idExecucao}")
+    public ResponseEntity<RastreabilidadeFluxoDTO> rastreabilidade(@PathVariable Long idExecucao) {
+        return ResponseEntity.ok(fluxoPedidoAutomaticoService.rastreabilidade(idExecucao));
     }
 }

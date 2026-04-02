@@ -1,6 +1,8 @@
 package br.com.empresa.ressarcimento.ui;
 
 import br.com.empresa.ressarcimento.pedidos.PedidoService;
+import br.com.empresa.ressarcimento.pedidos.api.GerarPedidoAutomaticoResponse;
+import br.com.empresa.ressarcimento.pedidos.fluxo.FluxoPedidoAutomaticoService;
 import br.com.empresa.ressarcimento.shared.api.ResultadoImportacaoDTO;
 import jakarta.xml.bind.JAXBException;
 import java.io.IOException;
@@ -27,6 +29,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 public class UiPedidoController {
 
     private final PedidoService pedidoService;
+    private final FluxoPedidoAutomaticoService fluxoPedidoAutomaticoService;
 
     @GetMapping
     public String importar(Model model) {
@@ -75,15 +78,45 @@ public class UiPedidoController {
     }
 
     @PostMapping("/gerar-xml")
-    public ResponseEntity<byte[]> gerarXml(@RequestParam String ano, @RequestParam String mes)
+    public Object gerarXml(
+            @RequestParam String ano, @RequestParam String mes, RedirectAttributes redirectAttributes)
             throws JAXBException {
-        byte[] xml = pedidoService.gerarXml(ano, mes);
-        return ResponseEntity.ok()
-                .header(
-                        HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=enviOperacaoRessarcimento_" + ano + "_" + mes + ".xml")
-                .contentType(MediaType.APPLICATION_XML)
-                .body(xml);
+        try {
+            byte[] xml = pedidoService.gerarXml(ano, mes);
+            String mesArq = mes != null && mes.length() <= 2 ? mes.trim() : mes;
+            return ResponseEntity.ok()
+                    .header(
+                            HttpHeaders.CONTENT_DISPOSITION,
+                            "attachment; filename=enviOperacaoRessarcimento_" + ano.trim() + "_" + mesArq + ".xml")
+                    .contentType(MediaType.APPLICATION_XML)
+                    .body(xml);
+        } catch (IllegalArgumentException ex) {
+            redirectAttributes.addFlashAttribute("errorMessage", ex.getMessage());
+            return "redirect:/ui/pedidos/gerar-xml";
+        }
+    }
+
+    @GetMapping("/gerar-automatico")
+    public String gerarAutomaticoForm(Model model) {
+        model.addAttribute("pageTitle", "Pedidos — gerar XML automático (Fluxo B)");
+        return "ui/pedidos/gerar-automatico";
+    }
+
+    @PostMapping("/gerar-automatico")
+    public String gerarAutomaticoPost(
+            @RequestParam int ano, @RequestParam int mes, RedirectAttributes redirectAttributes) {
+        try {
+            GerarPedidoAutomaticoResponse resp = fluxoPedidoAutomaticoService.gerarAutomatico(ano, mes);
+            redirectAttributes.addFlashAttribute("fluxoBSuccess", Boolean.TRUE);
+            redirectAttributes.addFlashAttribute("fluxoBIdExecucao", resp.getIdExecucao());
+            redirectAttributes.addFlashAttribute("fluxoBArquivoPedidoId", resp.getArquivoPedidoId());
+            redirectAttributes.addFlashAttribute("fluxoBStatus", resp.getStatus());
+            redirectAttributes.addFlashAttribute("fluxoBAvisos", resp.getAvisos());
+        } catch (Exception ex) {
+            String msg = ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName();
+            redirectAttributes.addFlashAttribute("fluxoBError", msg);
+        }
+        return "redirect:/ui/pedidos/gerar-automatico";
     }
 
     @GetMapping("/historico")

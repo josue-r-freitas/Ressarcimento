@@ -2,6 +2,8 @@ package br.com.empresa.ressarcimento.ui;
 
 import br.com.empresa.ressarcimento.produtos.ProdutoService;
 import br.com.empresa.ressarcimento.produtos.api.GerarPlanilhaAutomaticaRequest;
+import br.com.empresa.ressarcimento.produtos.api.PlanilhaAutomaticaMetricasHeaders;
+import br.com.empresa.ressarcimento.produtos.api.ResultadoGeracaoPlanilhaAutomatica;
 import br.com.empresa.ressarcimento.produtos.automatizado.ProdutoPlanilhaAutomaticaService;
 import br.com.empresa.ressarcimento.shared.api.ResultadoImportacaoDTO;
 import jakarta.xml.bind.JAXBException;
@@ -124,12 +126,15 @@ public class UiProdutoController {
                 .mesReferencia(mesReferencia)
                 .nomeArquivoResumo(nomeArquivoResumo)
                 .build();
-        byte[] xlsx = planilhaAutomaticaService.gerarPlanilhaAutomatica(body);
+        ResultadoGeracaoPlanilhaAutomatica resultado = planilhaAutomaticaService.gerarPlanilhaAutomatica(body);
+        HttpHeaders metricas = new HttpHeaders();
+        PlanilhaAutomaticaMetricasHeaders.addTo(metricas, resultado);
         return ResponseEntity.ok()
+                .headers(metricas)
                 .header(HttpHeaders.CONTENT_DISPOSITION, CONTENT_DISPOSITION_PLANILHA_XLSX)
                 .contentType(MediaType.parseMediaType(
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
-                .body(xlsx);
+                .body(resultado.getPlanilhaXlsx());
     }
 
     @GetMapping("/logs-geracao")

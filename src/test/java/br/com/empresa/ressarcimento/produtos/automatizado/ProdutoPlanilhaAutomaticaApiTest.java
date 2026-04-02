@@ -44,9 +44,10 @@ class ProdutoPlanilhaAutomaticaApiTest {
 
         String efd =
                 """
-                |0200|ITEM01|Produto integracao||
+                |0190|UN|Unidade|
+                |0200|ITEM01|Produto integracao|||UN|
                 |0220|CX|1,000000|
-                |C100|0|0|FORN|55|00|1|999|%s|
+                |C100|0|0|FORN|55|00|1|999|%s|15012026|
                 |C170|1|ITEM01|X|10|UN|
                 """
                         .formatted(CHAVE);
@@ -79,12 +80,14 @@ class ProdutoPlanilhaAutomaticaApiTest {
             h.createCell(2).setCellValue("DATA APRES.");
             h.createCell(3).setCellValue("CNPJ FORNECEDOR");
             h.createCell(4).setCellValue("CODG. ITEM");
+            h.createCell(5).setCellValue("TRIBUTO");
             var row = sh.createRow(1);
             row.createCell(0).setCellValue(CHAVE);
             row.createCell(1).setCellValue(1);
             row.createCell(2).setCellValue("15/01/2026");
             row.createCell(3).setCellValue("12.345.678/0001-99");
             row.createCell(4).setCellValue("P001");
+            row.createCell(5).setCellValue("1380");
             try (var out = Files.newOutputStream(resumo.resolve("resumo.xlsx"))) {
                 wb.write(out);
             }

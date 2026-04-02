@@ -2,9 +2,13 @@ package br.com.empresa.ressarcimento.produtos.automatizado;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Stream;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -103,6 +107,63 @@ public class LeitorNfeUcom {
             }
         }
         return Optional.empty();
+    }
+
+    /**
+     * Itens cujo CFOP (tag {@code prod/CFOP}) está em {@code cfopsAceitos} — regra do Fluxo B (filtro no XML, não na EFD).
+     */
+    public List<ItemNfeCfop> listarItensComCfops(Path xmlFile, Set<String> cfopsAceitos) throws Exception {
+        List<ItemNfeCfop> saida = new ArrayList<>();
+        if (cfopsAceitos == null || cfopsAceitos.isEmpty()) {
+            return saida;
+        }
+        DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();
+        f.setNamespaceAware(true);
+        f.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        DocumentBuilder builder = f.newDocumentBuilder();
+        try (InputStream in = Files.newInputStream(xmlFile)) {
+            Document doc = builder.parse(in);
+            NodeList todos = doc.getElementsByTagNameNS("*", "det");
+            for (int i = 0; i < todos.getLength(); i++) {
+                Node n = todos.item(i);
+                if (!(n instanceof Element det)) {
+                    continue;
+                }
+                String nItemAttr = det.getAttribute("nItem");
+                int ni = parseInt(nItemAttr);
+                Element prod = primeiroFilhoLocal(det, "prod");
+                if (prod == null) {
+                    continue;
+                }
+                String cfop = textoFilho(prod, "CFOP");
+                if (cfop == null || !cfopsAceitos.contains(cfop.trim())) {
+                    continue;
+                }
+                String cProd = textoFilho(prod, "cProd");
+                String uCom = textoFilho(prod, "uCom");
+                BigDecimal qCom = parseDecimal(textoFilho(prod, "qCom"));
+                if (ni > 0 && cProd != null && !cProd.isBlank()) {
+                    saida.add(new ItemNfeCfop(
+                            ni,
+                            cfop.trim(),
+                            cProd.trim(),
+                            qCom != null ? qCom : BigDecimal.ZERO,
+                            uCom != null ? uCom.trim() : ""));
+                }
+            }
+        }
+        return saida;
+    }
+
+    private static BigDecimal parseDecimal(String s) {
+        if (s == null || s.isBlank()) {
+            return null;
+        }
+        try {
+            return new BigDecimal(s.trim().replace(",", "."));
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private static int parseInt(String s) {

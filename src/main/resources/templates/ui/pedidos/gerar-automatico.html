@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<head th:replace="~{fragments/head :: head}"></head>
+<body class="bg-light">
+<div th:replace="~{fragments/nav :: nav}"></div>
+<main class="container pb-5">
+    <h1 class="h4 mb-3" th:text="${pageTitle}">Fluxo B</h1>
+
+    <div th:if="${fluxoBError}" class="alert alert-danger" th:text="${fluxoBError}">Erro</div>
+
+    <div th:if="${fluxoBSuccess}" class="alert alert-success">
+        <p class="mb-2"><strong>Geração concluída.</strong> Status: <span th:text="${fluxoBStatus}">OK</span></p>
+        <p class="mb-2 small">idExecucao: <span th:text="${fluxoBIdExecucao}">0</span></p>
+        <p class="mb-2" th:if="${fluxoBArquivoPedidoId != null}">
+            <a class="btn btn-sm btn-outline-primary"
+               th:href="@{/ui/pedidos/historico/{id}/download(id=${fluxoBArquivoPedidoId})}">
+                Baixar XML gerado
+            </a>
+            <a class="btn btn-sm btn-outline-secondary ms-1"
+               th:href="@{/api/pedidos/rastreabilidade/{id}(id=${fluxoBIdExecucao})}" target="_blank" rel="noopener">
+                Rastreabilidade (JSON)
+            </a>
+        </p>
+        <div th:if="${fluxoBAvisos != null && !fluxoBAvisos.isEmpty()}" class="mt-2">
+            <strong class="small">Avisos:</strong>
+            <ul class="small mb-0">
+                <li th:each="a : ${fluxoBAvisos}" th:text="${a}">aviso</li>
+            </ul>
+        </div>
+    </div>
+
+    <p class="text-muted">
+        Usa as pastas configuradas em <code>application.yml</code> / variáveis
+        <code>RESSARCIMENTO_EFDS_DIR</code>, <code>RESSARCIMENTO_NFES_SAIDA_DIR</code>,
+        <code>RESSARCIMENTO_NFES_DIR</code> (entradas), <code>RESSARCIMENTO_RESUMO_NOTAS_DIR</code>
+        e a <strong>matriz de produtos</strong> no banco. NF-e de saída com CFOP <strong>6102</strong> ou
+        <strong>6108</strong> no XML.
+    </p>
+
+    <form th:action="@{/ui/pedidos/gerar-automatico}" method="post" class="card shadow-sm">
+        <div class="card-body row g-3">
+            <div class="col-md-2">
+                <label class="form-label" for="ano">Ano</label>
+                <input id="ano" class="form-control" type="number" name="ano" required min="2000" max="2100"
+                       placeholder="ex.: 2024"/>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label" for="mes">Mês</label>
+                <input id="mes" class="form-control" type="number" name="mes" required min="1" max="12"
+                       placeholder="ex.: 11"/>
+            </div>
+        </div>
+        <div class="card-footer">
+            <button type="submit" class="btn btn-primary">Executar Fluxo B</button>
+        </div>
+    </form>
+</main>
+<th:block th:replace="~{fragments/scripts :: bootstrap}"></th:block>
+</body>
+</html>

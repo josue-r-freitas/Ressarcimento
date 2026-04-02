@@ -8,6 +8,8 @@ import lombok.Data;
 @Builder
 public class InfoItemSped {
     private String descrItem;
+    /** UNID_INV do registro 0200 (unidade de inventário interna). */
+    private String unidInv;
     /** Fator do 0220; null se ausente (aplicar 1,000000). */
     private BigDecimal fatorConversao0220;
 }
