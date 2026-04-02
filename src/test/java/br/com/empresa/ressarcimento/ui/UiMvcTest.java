@@ -1,9 +1,12 @@
 package br.com.empresa.ressarcimento.ui;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -17,9 +20,11 @@ import br.com.empresa.ressarcimento.shared.api.ResultadoImportacaoDTO;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -71,6 +76,28 @@ class UiMvcTest {
         mockMvc.perform(get("/ui/declarante"))
                 .andExpect(status().isOk())
                 .andExpect(model().attribute("declarante", dto));
+    }
+
+    @Test
+    void declarantePost_comParametrosFlat_chamaSalvarComCamposPreenchidos() throws Exception {
+        ArgumentCaptor<DeclaranteDTO> cap = ArgumentCaptor.forClass(DeclaranteDTO.class);
+        when(declaranteService.salvar(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        mockMvc.perform(post("/ui/declarante")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("cnpjRaiz", "12345678")
+                        .param("ieContribuinteDeclarante", "12345678901")
+                        .param("razaoSocial", "Empresa X")
+                        .param("nomeResponsavel", "João Silva")
+                        .param("foneResponsavel", "92988887777")
+                        .param("emailResponsavel", "j@x.com"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/ui/declarante"));
+
+        verify(declaranteService).salvar(cap.capture());
+        assertThat(cap.getValue().getCnpjRaiz()).isEqualTo("12345678");
+        assertThat(cap.getValue().getIeContribuinteDeclarante()).isEqualTo("12345678901");
+        assertThat(cap.getValue().getRazaoSocial()).isEqualTo("Empresa X");
     }
 
     @Test

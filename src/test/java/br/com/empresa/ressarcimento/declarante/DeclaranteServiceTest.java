@@ -9,7 +9,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -29,14 +28,14 @@ class DeclaranteServiceTest {
 
     @Test
     void buscar_lancaQuandoNaoExisteDeclarante() {
-        when(repository.findAll()).thenReturn(List.of());
+        when(repository.findFirstByOrderByIdAsc()).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.buscar())
                 .isInstanceOf(DeclaranteNaoEncontradoException.class);
     }
 
     @Test
     void buscarSeExistir_retornaVazioQuandoNaoHaDeclarante() {
-        when(repository.findAll()).thenReturn(List.of());
+        when(repository.findFirstByOrderByIdAsc()).thenReturn(Optional.empty());
         assertThat(service.buscarSeExistir()).isEmpty();
     }
 
@@ -51,7 +50,7 @@ class DeclaranteServiceTest {
                 .foneResponsavel("92999999999")
                 .emailResponsavel("joao@teste.com")
                 .build();
-        when(repository.findAll()).thenReturn(List.of(entidade));
+        when(repository.findFirstByOrderByIdAsc()).thenReturn(Optional.of(entidade));
         assertThat(service.buscarSeExistir()).isPresent().get().satisfies(d -> assertThat(d.getCnpjRaiz()).isEqualTo("12345678"));
     }
 
@@ -66,7 +65,7 @@ class DeclaranteServiceTest {
                 .foneResponsavel("92999999999")
                 .emailResponsavel("joao@teste.com")
                 .build();
-        when(repository.findAll()).thenReturn(List.of(entidade));
+        when(repository.findFirstByOrderByIdAsc()).thenReturn(Optional.of(entidade));
 
         DeclaranteDTO dto = service.buscar();
 
@@ -76,7 +75,7 @@ class DeclaranteServiceTest {
     }
 
     @Test
-    void salvar_criaNovoQuandoCnpjRaizNaoExiste() {
+    void salvar_criaNovoQuandoNaoHaDeclaranteCadastrado() {
         DeclaranteDTO dto = DeclaranteDTO.builder()
                 .cnpjRaiz("87654321")
                 .ieContribuinteDeclarante("87654321")
@@ -85,7 +84,7 @@ class DeclaranteServiceTest {
                 .foneResponsavel("92988888888")
                 .emailResponsavel("maria@teste.com")
                 .build();
-        when(repository.findByCnpjRaiz("87654321")).thenReturn(Optional.empty());
+        when(repository.findFirstByOrderByIdAsc()).thenReturn(Optional.empty());
         when(repository.save(any(Declarante.class))).thenAnswer(inv -> {
             Declarante d = inv.getArgument(0);
             d.setId(2L);
@@ -100,7 +99,7 @@ class DeclaranteServiceTest {
     }
 
     @Test
-    void salvar_atualizaQuandoCnpjRaizJaExiste() {
+    void salvar_atualizaRegistroUnicoQuandoJaExiste() {
         Declarante existente = Declarante.builder()
                 .id(1L)
                 .cnpjRaiz("12345678")
@@ -118,7 +117,7 @@ class DeclaranteServiceTest {
                 .foneResponsavel("92977777777")
                 .emailResponsavel("joao.silva@teste.com")
                 .build();
-        when(repository.findByCnpjRaiz("12345678")).thenReturn(Optional.of(existente));
+        when(repository.findFirstByOrderByIdAsc()).thenReturn(Optional.of(existente));
         when(repository.save(any(Declarante.class))).thenAnswer(inv -> inv.getArgument(0));
 
         DeclaranteDTO salvo = service.salvar(dto);
@@ -126,5 +125,67 @@ class DeclaranteServiceTest {
         assertThat(salvo.getRazaoSocial()).isEqualTo("Razão Atualizada");
         assertThat(existente.getRazaoSocial()).isEqualTo("Razão Atualizada");
         verify(repository).save(existente);
+    }
+
+    @Test
+    void salvar_atualizaRegistroUnicoMesmoAlterandoCnpjRaiz() {
+        Declarante existente = Declarante.builder()
+                .id(1L)
+                .cnpjRaiz("11111111")
+                .ieContribuinteDeclarante("11111111")
+                .razaoSocial("Antiga")
+                .nomeResponsavel("João")
+                .foneResponsavel("92999999999")
+                .emailResponsavel("joao@teste.com")
+                .build();
+        DeclaranteDTO dto = DeclaranteDTO.builder()
+                .cnpjRaiz("22222222")
+                .ieContribuinteDeclarante("22222222222")
+                .razaoSocial("Nova Razão")
+                .nomeResponsavel("João Silva")
+                .foneResponsavel("92977777777")
+                .emailResponsavel("joao.silva@teste.com")
+                .build();
+        when(repository.findFirstByOrderByIdAsc()).thenReturn(Optional.of(existente));
+        when(repository.save(any(Declarante.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        DeclaranteDTO salvo = service.salvar(dto);
+
+        assertThat(salvo.getCnpjRaiz()).isEqualTo("22222222");
+        assertThat(existente.getCnpjRaiz()).isEqualTo("22222222");
+        assertThat(existente.getIeContribuinteDeclarante()).isEqualTo("22222222222");
+        verify(repository).save(existente);
+    }
+
+    @Test
+    void salvar_atualizaQuandoCnpjRaizVemComEspacosPorPaddingChar8() {
+        Declarante existente = Declarante.builder()
+                .id(1L)
+                .cnpjRaiz("12345678")
+                .ieContribuinteDeclarante("12345678")
+                .razaoSocial("Antiga")
+                .nomeResponsavel("João")
+                .foneResponsavel("92999999999")
+                .emailResponsavel("joao@teste.com")
+                .build();
+        DeclaranteDTO dto = DeclaranteDTO.builder()
+                .cnpjRaiz("12345678  ")
+                .ieContribuinteDeclarante("12345678")
+                .razaoSocial("TECNORÁDIO COMÉRCIO E SOLUÇÕES EM COMUNICACÃO EIRELI-EPP")
+                .nomeResponsavel("João Silva")
+                .foneResponsavel("92977777777")
+                .emailResponsavel("joao.silva@teste.com")
+                .build();
+        when(repository.findFirstByOrderByIdAsc()).thenReturn(Optional.of(existente));
+        when(repository.save(any(Declarante.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        DeclaranteDTO salvo = service.salvar(dto);
+
+        assertThat(salvo.getCnpjRaiz()).isEqualTo("12345678");
+        assertThat(salvo.getRazaoSocial())
+                .isEqualTo("TECNORÁDIO COMÉRCIO E SOLUÇÕES EM COMUNICACÃO EIRELI-EPP");
+        assertThat(existente.getRazaoSocial())
+                .isEqualTo("TECNORÁDIO COMÉRCIO E SOLUÇÕES EM COMUNICACÃO EIRELI-EPP");
+        verify(repository).findFirstByOrderByIdAsc();
     }
 }

@@ -48,7 +48,7 @@ public class ProdutoMatriz {
     /** unidadeInternaProduto (D05) TUnidProduto: 1–6 (XSD tiposBasicos) */
     @Column(name = "unidade_interna_produto", nullable = false, length = 8)
     @NotBlank
-    @Size(min = 2, max = 8)
+    @Size(min = 1, max = 6)
     private String unidadeInternaProduto;
 
     /** fatorConversao (D06) 1-9 dígitos, 6 decimais */

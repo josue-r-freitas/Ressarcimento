@@ -50,6 +50,8 @@ public class ProdutoPlanilhaAutomaticaService {
     @Transactional
     public byte[] gerarPlanilhaAutomatica(GerarPlanilhaAutomaticaRequest req) throws IOException {
         GerarPlanilhaAutomaticaRequest r = req != null ? req : new GerarPlanilhaAutomaticaRequest();
+        // Único ponto que apaga a tabela: importação manual de produtos não deve limpar estes logs.
+        logRepository.deleteAllInBatch();
         Path dirResumo = exigirDiretorio(properties.getResumoNotasDir(), "ressarcimento.resumo-notas-dir");
         Path dirEfd = exigirDiretorio(properties.getEfdsDir(), "ressarcimento.efds-dir");
         Path dirNfes = exigirDiretorio(properties.getNfesDir(), "ressarcimento.nfes-dir");
@@ -67,15 +69,6 @@ public class ProdutoPlanilhaAutomaticaService {
 
         List<LogGeracaoPlanilha> logs = new ArrayList<>();
         LocalDateTime agora = LocalDateTime.now();
-
-        LeitorResumoNf.detectarPeriodosMisturados(linhasResumo)
-                .ifPresent(msg -> logs.add(log(
-                        TipoLogGeracaoPlanilha.PERIODO_MISTURADO,
-                        null,
-                        null,
-                        arquivoResumo.getFileName().toString(),
-                        msg,
-                        agora)));
 
         Map<String, ProdutoPlanilhaDTO> dedup = new LinkedHashMap<>();
 

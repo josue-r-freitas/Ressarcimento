@@ -14,14 +14,6 @@ class LeitorResumoNfTest {
     private final LeitorResumoNf leitor = new LeitorResumoNf();
 
     @Test
-    void detectaPeriodosMisturados() {
-        var a = ResumoNfLinhaDTO.builder().dataApresentacao(java.time.LocalDate.of(2026, 1, 1)).build();
-        var b = ResumoNfLinhaDTO.builder().dataApresentacao(java.time.LocalDate.of(2026, 2, 1)).build();
-        assertThat(LeitorResumoNf.detectarPeriodosMisturados(List.of(a, b))).isPresent();
-        assertThat(LeitorResumoNf.detectarPeriodosMisturados(List.of(a))).isEmpty();
-    }
-
-    @Test
     void leExcel_filtraDataApresOrdenaPorChaveESeq() throws Exception {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         try (XSSFWorkbook wb = new XSSFWorkbook()) {
@@ -47,6 +39,12 @@ class LeitorResumoNfTest {
             var skip = sh.createRow(3);
             skip.createCell(0).setCellValue("99999999999999999999999999999999999999999999");
             skip.createCell(2).setCellValue("");
+            var skipSemCodg = sh.createRow(4);
+            skipSemCodg.createCell(0).setCellValue("88888888888888888888888888888888888888888888");
+            skipSemCodg.createCell(1).setCellValue(3);
+            skipSemCodg.createCell(2).setCellValue("10/01/2026");
+            skipSemCodg.createCell(3).setCellValue("12345678000199");
+            skipSemCodg.createCell(4).setCellValue("");
             wb.write(bos);
         }
         List<ResumoNfLinhaDTO> linhas =

@@ -7,6 +7,9 @@
     <h1 class="h4 mb-3" th:text="${pageTitle}">Declarante</h1>
     <div th:replace="~{fragments/alerts :: flash}"></div>
     <form th:action="@{/ui/declarante}" th:object="${declarante}" method="post" class="card shadow-sm">
+        <div th:if="${#fields.hasErrors('*')}" class="alert alert-danger m-3 mb-0" role="alert">
+            Não foi possível salvar: verifique os campos destacados (por exemplo, CNPJ raiz com exatamente 8 dígitos, sem espaços).
+        </div>
         <div class="card-body row g-3">
             <div class="col-md-4">
                 <label class="form-label" for="cnpjRaiz">CNPJ raiz (8 dígitos)</label>

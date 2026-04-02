@@ -7,7 +7,6 @@ import br.com.empresa.ressarcimento.planilhas.LeitorPlanilhaProdutos;
 import br.com.empresa.ressarcimento.planilhas.dto.ProdutoPlanilhaDTO;
 import br.com.empresa.ressarcimento.produtos.api.ProdutoDTO;
 import br.com.empresa.ressarcimento.produtos.api.ArquivoProdutosDTO;
-import br.com.empresa.ressarcimento.produtos.automatizado.LogGeracaoPlanilhaRepository;
 import br.com.empresa.ressarcimento.produtos.domain.ArquivoProdutos;
 import br.com.empresa.ressarcimento.produtos.domain.ProdutoMatriz;
 import br.com.empresa.ressarcimento.shared.api.ErroPlanilhaDTO;
@@ -34,7 +33,6 @@ public class ProdutoService {
 
     private final ProdutoMatrizRepository produtoRepository;
     private final ArquivoProdutosRepository arquivoRepository;
-    private final LogGeracaoPlanilhaRepository logGeracaoPlanilhaRepository;
     private final ItemNotaSaidaRepository itemNotaSaidaRepository;
     private final LeitorPlanilhaProdutos leitorPlanilha;
     private final DeclaranteService declaranteService;
@@ -88,7 +86,6 @@ public class ProdutoService {
                     .erros(erros)
                     .build();
         }
-        logGeracaoPlanilhaRepository.deleteAllInBatch();
         itemNotaSaidaRepository.desvincularProdutosMatriz();
         produtoRepository.deleteAllInBatch();
         for (ProdutoMatriz p : aPersistir) {

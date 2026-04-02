@@ -4,7 +4,6 @@ import br.com.empresa.ressarcimento.planilhas.dto.ResumoNfLinhaDTO;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.LocalDate;
-import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -61,12 +60,15 @@ public class LeitorResumoNf {
                 String chave = normalizarChave(getCellString(row.getCell(idxChave)));
                 int seqItem = parseInt(getCellString(row.getCell(idxSeq)), row.getCell(idxSeq));
                 String codg = getCellString(row.getCell(idxCodg));
+                if (codg == null || codg.trim().isEmpty()) {
+                    continue;
+                }
                 String cnpj = normalizarCnpj(getCellString(row.getCell(idxCnpj)));
                 linhas.add(ResumoNfLinhaDTO.builder()
                         .numeroLinhaPlanilha(rowNum)
                         .chave(chave != null ? chave : "")
                         .seqItem(seqItem)
-                        .codgItem(codg != null ? codg.trim() : "")
+                        .codgItem(codg.trim())
                         .cnpjFornecedor(cnpj != null ? cnpj : "")
                         .dataApresentacao(dataApres.orElse(null))
                         .build());
@@ -159,20 +161,4 @@ public class LeitorResumoNf {
         return s.replaceAll("\\D", "");
     }
 
-    /**
-     * Se houver mais de um ano/mês distinto em {@code dataApresentacao} não nula, retorna os períodos encontrados.
-     */
-    public static Optional<String> detectarPeriodosMisturados(List<ResumoNfLinhaDTO> linhas) {
-        List<YearMonth> meses = linhas.stream()
-                .map(ResumoNfLinhaDTO::getDataApresentacao)
-                .filter(d -> d != null)
-                .map(YearMonth::from)
-                .distinct()
-                .sorted()
-                .toList();
-        if (meses.size() <= 1) {
-            return Optional.empty();
-        }
-        return Optional.of("Períodos distintos em DATA APRES.: " + meses);
-    }
 }

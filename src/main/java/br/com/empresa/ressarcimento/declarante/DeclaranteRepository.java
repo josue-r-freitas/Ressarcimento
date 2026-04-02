@@ -6,5 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface DeclaranteRepository extends JpaRepository<Declarante, Long> {
 
-    Optional<Declarante> findByCnpjRaiz(String cnpjRaiz);
+    /** Um único declarante na aplicação; ordenação fixa evita linha “aleatória” em atualizações. */
+    Optional<Declarante> findFirstByOrderByIdAsc();
 }
