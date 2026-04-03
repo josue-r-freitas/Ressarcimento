@@ -3,6 +3,7 @@ package br.com.empresa.ressarcimento.produtos.automatizado;
 import br.com.empresa.ressarcimento.planilhas.dto.ResumoNfLinhaDTO;
 import java.io.IOException;
 import java.io.InputStream;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -28,6 +29,19 @@ public class LeitorResumoNf {
 
     private static final DataFormatter DATA_FORMATTER = new DataFormatter(Locale.ROOT);
 
+    /**
+     * Colunas opcionais (além das obrigatórias) para staging Fluxo B — ver {@link ResumoNfLinhaDTO}.
+     * Cabeçalhos após {@link #normalizarTituloColuna(String)}.
+     */
+    private static final String[] COL_NR_NOTA = {"NR. NOTA", "NR NOTA", "NUMERO NOTA", "NÚMERO NOTA"};
+
+    private static final String[] COL_QTD_UNIT = {
+        "QTD. UNIT.", "QUANTIDADE", "QTDE. UNIT.", "QTD UNIT", "QUANTIDADE UNITÁRIA", "QUANTIDADE UNITARIA"
+    };
+    private static final String[] COL_VL_UNIT = {"VL. UNIT.", "VALOR UNIT.", "VALOR UNITÁRIO", "VALOR UNITARIO", "VLR. UNIT."};
+    private static final String[] COL_CFOP = {"CFOP"};
+    private static final String[] COL_VL_IMPOSTO = {"VL. IMPOSTO.", "VALOR IMPOSTO", "VL. ICMS", "VALOR ICMS"};
+
     public List<ResumoNfLinhaDTO> lerExcel(InputStream inputStream) throws IOException {
         try (Workbook workbook = new XSSFWorkbook(inputStream)) {
             Sheet sheet = workbook.getSheetAt(0);
@@ -42,6 +56,11 @@ public class LeitorResumoNf {
             Integer idxCnpj = colunas.get("CNPJ FORNECEDOR");
             Integer idxCodg = colunas.get("CODG. ITEM");
             Integer idxTributo = colunas.get("TRIBUTO");
+            Integer idxNrNota = primeiroIndiceColuna(colunas, COL_NR_NOTA);
+            Integer idxQtd = primeiroIndiceColuna(colunas, COL_QTD_UNIT);
+            Integer idxVlUnit = primeiroIndiceColuna(colunas, COL_VL_UNIT);
+            Integer idxCfop = primeiroIndiceColuna(colunas, COL_CFOP);
+            Integer idxVlImposto = primeiroIndiceColuna(colunas, COL_VL_IMPOSTO);
             if (idxChave == null || idxSeq == null || idxDataApres == null || idxCnpj == null || idxCodg == null) {
                 throw new IllegalArgumentException(
                         "Planilha resumo deve conter colunas: CHAVE, SEQ. ITEM, DATA APRES., CNPJ FORNECEDOR, CODG. ITEM");
@@ -66,6 +85,11 @@ public class LeitorResumoNf {
                 }
                 String cnpj = normalizarCnpj(getCellString(row.getCell(idxCnpj)));
                 String trib = idxTributo != null ? getCellString(row.getCell(idxTributo)) : null;
+                String nrNota = idxNrNota != null ? trimOrNull(getCellString(row.getCell(idxNrNota))) : null;
+                String rawQtd = idxQtd != null ? getCellString(row.getCell(idxQtd)) : null;
+                String rawVl = idxVlUnit != null ? getCellString(row.getCell(idxVlUnit)) : null;
+                String rawCfop = idxCfop != null ? getCellString(row.getCell(idxCfop)) : null;
+                String rawImp = idxVlImposto != null ? getCellString(row.getCell(idxVlImposto)) : null;
                 linhas.add(ResumoNfLinhaDTO.builder()
                         .numeroLinhaPlanilha(rowNum)
                         .chave(chave != null ? chave : "")
@@ -74,6 +98,11 @@ public class LeitorResumoNf {
                         .cnpjFornecedor(cnpj != null ? cnpj : "")
                         .dataApresentacao(dataApres.orElse(null))
                         .tributo(trib != null ? trib.trim() : null)
+                        .nrNota(nrNota)
+                        .qtdUnitCompra(parseDecimalCell(idxQtd != null ? row.getCell(idxQtd) : null, rawQtd))
+                        .valorUnitario(parseDecimalCell(idxVlUnit != null ? row.getCell(idxVlUnit) : null, rawVl))
+                        .cfop(trimOrNull(rawCfop))
+                        .valorImposto(parseDecimalCell(idxVlImposto != null ? row.getCell(idxVlImposto) : null, rawImp))
                         .build());
             }
             linhas.sort(Comparator.comparing(ResumoNfLinhaDTO::getChave).thenComparingInt(ResumoNfLinhaDTO::getSeqItem));
@@ -92,6 +121,43 @@ public class LeitorResumoNf {
             }
         }
         return map;
+    }
+
+    private static Integer primeiroIndiceColuna(Map<String, Integer> colunas, String... titulosNormalizados) {
+        for (String t : titulosNormalizados) {
+            Integer i = colunas.get(t);
+            if (i != null) {
+                return i;
+            }
+        }
+        return null;
+    }
+
+    private static String trimOrNull(String s) {
+        if (s == null || s.isBlank()) {
+            return null;
+        }
+        return s.trim();
+    }
+
+    private static BigDecimal parseDecimalCell(Cell cell, String raw) {
+        if (cell != null && cell.getCellType() == CellType.NUMERIC && !DateUtil.isCellDateFormatted(cell)) {
+            return BigDecimal.valueOf(cell.getNumericCellValue());
+        }
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String t = raw.trim().replace('\u00A0', ' ').replace(" ", "");
+        if (t.contains(".") && t.contains(",")) {
+            t = t.replace(".", "").replace(',', '.');
+        } else if (t.contains(",")) {
+            t = t.replace(',', '.');
+        }
+        try {
+            return new BigDecimal(t);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     static String normalizarTituloColuna(String s) {

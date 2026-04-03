@@ -13,11 +13,15 @@ import br.com.empresa.ressarcimento.pedidos.domain.ArquivoPedido;
 import br.com.empresa.ressarcimento.pedidos.domain.ItemNotaSaida;
 import br.com.empresa.ressarcimento.pedidos.domain.NotaEntrada;
 import br.com.empresa.ressarcimento.pedidos.domain.NotaSaida;
+import br.com.empresa.ressarcimento.pedidos.fluxo.audit.FluxoBAuditItemNfeSaida;
+import br.com.empresa.ressarcimento.pedidos.fluxo.audit.FluxoBAuditNfeSaida;
+import br.com.empresa.ressarcimento.pedidos.fluxo.audit.FluxoBAuditStagingService;
 import br.com.empresa.ressarcimento.planilhas.dto.ResumoNfLinhaDTO;
 import br.com.empresa.ressarcimento.produtos.ProdutoMatrizRepository;
 import br.com.empresa.ressarcimento.produtos.automatizado.ItemNfeCfop;
 import br.com.empresa.ressarcimento.produtos.automatizado.LeitorNfeUcom;
 import br.com.empresa.ressarcimento.produtos.automatizado.LeitorResumoNf;
+import br.com.empresa.ressarcimento.produtos.automatizado.NfeIdeCampos;
 import br.com.empresa.ressarcimento.produtos.automatizado.efd.C170Linha;
 import br.com.empresa.ressarcimento.produtos.automatizado.efd.EfdIndice;
 import br.com.empresa.ressarcimento.produtos.automatizado.efd.ParserEfdService;
@@ -67,6 +71,11 @@ public class FluxoPedidoAutomaticoService {
 
     private static final Set<String> CFOPS_FLUXO_B = Set.of("6102", "6108");
 
+    private static final String STG_SAIDA_SEM_XML = "SEM_XML";
+    private static final String STG_SAIDA_SEM_ITENS_CFOP = "SEM_ITENS_CFOP";
+    private static final String STG_SAIDA_OK = "OK";
+    private static final String STG_SAIDA_ERRO_LEITURA = "ERRO_LEITURA_XML";
+
     private final RessarcimentoProperties properties;
     private final ParserEfdService parserEfdService;
     private final LeitorNfeUcom leitorNfeUcom;
@@ -76,6 +85,7 @@ public class FluxoPedidoAutomaticoService {
     private final GeradorXmlPedidos geradorXmlPedidos;
     private final ExecucaoFluxoPedidoRepository execucaoRepository;
     private final ArquivoPedidoRepository arquivoPedidoRepository;
+    private final FluxoBAuditStagingService fluxoBAuditStagingService;
 
     @Transactional
     public GerarPedidoAutomaticoResponse gerarAutomatico(int ano, int mes) throws JAXBException, IOException {
@@ -88,6 +98,8 @@ public class FluxoPedidoAutomaticoService {
         Path dirNfeEntrada = exigirDir(properties.getNfesDir(), "ressarcimento.nfes-dir");
         Path dirResumo = exigirDir(properties.getResumoNotasDir(), "ressarcimento.resumo-notas-dir");
         Path arquivoResumo = resolverPrimeiroXlsx(dirResumo);
+
+        fluxoBAuditStagingService.limparStaging();
 
         ExecucaoFluxoPedido exec = ExecucaoFluxoPedido.builder()
                 .declarante(decl)
@@ -130,6 +142,12 @@ public class FluxoPedidoAutomaticoService {
                     .filter(l -> !StringUtils.hasText(l.getTributo()) || "1380".equals(l.getTributo().trim()))
                     .toList();
 
+            try {
+                fluxoBAuditStagingService.persistirEntradasDoResumo(linhasResumo, dirNfeEntrada, leitorNfeUcom);
+            } catch (Exception e) {
+                throw new IOException("Falha ao gravar staging de auditoria (resumo NF entrada): " + e.getMessage(), e);
+            }
+
             Map<String, ArrayDeque<EntradaFifoSlot>> estoqueFifo =
                     construirEstoqueFifo(linhasResumo, indice, exec, avisos);
 
@@ -138,21 +156,66 @@ public class FluxoPedidoAutomaticoService {
             for (String chaveSaida : chavesSaida) {
                 Optional<Path> xmlOpt = leitorNfeUcom.localizarArquivoXml(dirNfeSaida, chaveSaida);
                 if (xmlOpt.isEmpty()) {
+                    fluxoBAuditStagingService.salvarNfeSaida(FluxoBAuditNfeSaida.builder()
+                            .chaveNFe(chaveSaida)
+                            .statusProcessamento(STG_SAIDA_SEM_XML)
+                            .build());
                     String msg = "XML de NF-e de saída não encontrado para chave " + chaveSaida;
                     avisos.add(msg);
                     addLog(exec, "WARN", "LEITURA_XML_SAIDA", msg, chaveSaida);
                     continue;
                 }
+
+                FluxoBAuditNfeSaida auditSaida = FluxoBAuditNfeSaida.builder()
+                        .chaveNFe(chaveSaida)
+                        .statusProcessamento(STG_SAIDA_ERRO_LEITURA)
+                        .build();
                 List<ItemNfeCfop> itensXml;
                 try {
+                    Optional<NfeIdeCampos> ideOpt = leitorNfeUcom.lerIdeCampos(xmlOpt.get());
+                    if (ideOpt.isPresent()) {
+                        NfeIdeCampos ide = ideOpt.get();
+                        auditSaida.setDhSaiEnt(truncarIde(ide.dhSaiEnt(), 35));
+                        auditSaida.setDhEmi(truncarIde(ide.dhEmi(), 35));
+                        auditSaida.setDEmi(truncarIde(ide.dEmi(), 12));
+                    }
+                    indice.dataDocumentoSaida(chaveSaida).ifPresent(auditSaida::setDataDocEfd);
                     itensXml = leitorNfeUcom.listarItensComCfops(xmlOpt.get(), CFOPS_FLUXO_B);
                 } catch (Exception e) {
+                    fluxoBAuditStagingService.salvarNfeSaida(auditSaida);
                     avisos.add("Falha ao ler XML saída " + chaveSaida + ": " + e.getMessage());
                     addLog(exec, "ERROR", "LEITURA_XML_SAIDA", e.getMessage(), chaveSaida);
                     continue;
                 }
                 if (itensXml.isEmpty()) {
+                    auditSaida.setStatusProcessamento(STG_SAIDA_SEM_ITENS_CFOP);
+                    fluxoBAuditStagingService.salvarNfeSaida(auditSaida);
                     continue;
+                }
+
+                String cfopsAgg = itensXml.stream()
+                        .map(ItemNfeCfop::cfop)
+                        .distinct()
+                        .sorted()
+                        .collect(Collectors.joining(","));
+                if (cfopsAgg.length() > 200) {
+                    cfopsAgg = cfopsAgg.substring(0, 197) + "...";
+                }
+                auditSaida.setCfopsItensElegiveis(cfopsAgg);
+                auditSaida.setStatusProcessamento(STG_SAIDA_OK);
+                auditSaida = fluxoBAuditStagingService.salvarNfeSaida(auditSaida);
+
+                for (ItemNfeCfop ix : itensXml) {
+                    Optional<ProdutoMatriz> pmStg = resolverProdutoPorCProdSaida(ix.cProd());
+                    fluxoBAuditStagingService.salvarItemNfeSaida(FluxoBAuditItemNfeSaida.builder()
+                            .auditNfeSaida(auditSaida)
+                            .numItemNFe(ix.nItem())
+                            .cProd(ix.cProd())
+                            .cfop(ix.cfop())
+                            .qCom(ix.qCom() != null ? ix.qCom() : BigDecimal.ZERO)
+                            .produtoMatriz(pmStg.orElse(null))
+                            .codInternoResolvido(pmStg.map(ProdutoMatriz::getCodInternoProduto).orElse(null))
+                            .build());
                 }
 
                 NotaSaida ns = NotaSaida.builder()
@@ -271,16 +334,24 @@ public class FluxoPedidoAutomaticoService {
         exec.getLogs().add(lg);
     }
 
+    /**
+     * Mapeia item da NF-e de saída: {@code cProd} do XML deve coincidir com {@code cod_interno_produto} na matriz
+     * (não usar {@code cod_prod_fornecedor}). Se houver várias linhas com o mesmo código interno, retorna a primeira
+     * retornada pelo repositório.
+     */
+    private static String truncarIde(String valor, int maxLen) {
+        if (valor == null || valor.isBlank()) {
+            return null;
+        }
+        String t = valor.trim();
+        return t.length() <= maxLen ? t : t.substring(0, maxLen);
+    }
+
     private Optional<ProdutoMatriz> resolverProdutoPorCProdSaida(String cProd) {
         if (cProd == null || cProd.isBlank()) {
             return Optional.empty();
         }
-        Optional<ProdutoMatriz> porInterno = produtoMatrizRepository.findFirstByCodInternoProduto(cProd.trim());
-        if (porInterno.isPresent()) {
-            return porInterno;
-        }
-        List<ProdutoMatriz> lista = produtoMatrizRepository.findByCodProdFornecedor(cProd.trim());
-        return lista.isEmpty() ? Optional.empty() : Optional.of(lista.get(0));
+        return produtoMatrizRepository.findFirstByCodInternoProduto(cProd.trim());
     }
 
     private static BigDecimal converterQuantidadeVenda(ItemNfeCfop ix, ProdutoMatriz pm) {

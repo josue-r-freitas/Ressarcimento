@@ -110,6 +110,50 @@ public class LeitorNfeUcom {
     }
 
     /**
+     * Lê {@code ide/dhSaiEnt}, {@code ide/dhEmi} e {@code ide/dEmi} do XML da NF-e (saída ou entrada).
+     */
+    public Optional<NfeIdeCampos> lerIdeCampos(Path xmlFile) throws Exception {
+        DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();
+        f.setNamespaceAware(true);
+        f.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        DocumentBuilder builder = f.newDocumentBuilder();
+        try (InputStream in = Files.newInputStream(xmlFile)) {
+            Document doc = builder.parse(in);
+            Element ide = primeiroElementoPorLocalName(doc, "ide");
+            if (ide == null) {
+                return Optional.empty();
+            }
+            String dhSaiEnt = trimToNull(textoFilho(ide, "dhSaiEnt"));
+            String dhEmi = trimToNull(textoFilho(ide, "dhEmi"));
+            String dEmi = trimToNull(textoFilho(ide, "dEmi"));
+            return Optional.of(new NfeIdeCampos(dhSaiEnt, dhEmi, dEmi));
+        }
+    }
+
+    /**
+     * Emissão da NF-e a partir do XML de entrada: prioriza {@code dhEmi}, senão {@code dEmi} (apenas o preenchido).
+     */
+    public Optional<NfeIdeCampos> lerEmissaoIdeEntrada(Path xmlFile) throws Exception {
+        return lerIdeCampos(xmlFile);
+    }
+
+    private static Element primeiroElementoPorLocalName(Document doc, String local) {
+        NodeList list = doc.getElementsByTagNameNS("*", local);
+        if (list.getLength() == 0) {
+            return null;
+        }
+        Node n = list.item(0);
+        return n instanceof Element e ? e : null;
+    }
+
+    private static String trimToNull(String s) {
+        if (s == null || s.isBlank()) {
+            return null;
+        }
+        return s.trim();
+    }
+
+    /**
      * Itens cujo CFOP (tag {@code prod/CFOP}) está em {@code cfopsAceitos} — regra do Fluxo B (filtro no XML, não na EFD).
      */
     public List<ItemNfeCfop> listarItensComCfops(Path xmlFile, Set<String> cfopsAceitos) throws Exception {
