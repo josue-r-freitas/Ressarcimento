@@ -5,13 +5,24 @@
 <div th:replace="~{fragments/nav :: nav}"></div>
 <main class="container pb-5">
     <h1 class="h4 mb-3" th:text="${pageTitle}">Gerar XML</h1>
-    <p class="text-muted">Gera o arquivo <code>enviProdutoRessarcimento.xml</code> com base no declarante e na matriz de produtos cadastrada.</p>
+    <p class="text-muted">Gera o arquivo <code>enviProdutoRessarcimento.xml</code> com base nas notas de saída vinculadas ao processamento escolhido e na matriz de produtos.</p>
     <form th:action="@{/ui/produtos/gerar-xml}" method="post" class="card shadow-sm">
         <div class="card-body">
-            <p class="mb-0">Clique no botão para baixar o XML.</p>
+            <div class="mb-3" th:if="${processamentos != null && !processamentos.isEmpty()}">
+                <label for="processamentoRessarcimentoId" class="form-label">Processamento de ressarcimento</label>
+                <select class="form-select" id="processamentoRessarcimentoId" name="processamentoRessarcimentoId" required>
+                    <option th:each="p : ${processamentos}"
+                            th:value="${p.id}"
+                            th:text="${p.anoReferencia + '/' + p.mesReferencia + ' — id ' + p.id + ' (' + p.statusExecucao + ')'}">
+                    </option>
+                </select>
+            </div>
+            <p class="text-warning" th:if="${processamentos == null || processamentos.isEmpty()}">
+                Não há processamentos registrados. Use «Processar ressarcimento» ou importe produtos (é criado um processamento automaticamente).
+            </p>
         </div>
         <div class="card-footer">
-            <button type="submit" class="btn btn-primary">Baixar XML</button>
+            <button type="submit" class="btn btn-primary" th:disabled="${processamentos == null || processamentos.isEmpty()}">Baixar XML</button>
         </div>
     </form>
 </main>

@@ -1,5 +1,6 @@
 package br.com.empresa.ressarcimento.pedidos.fluxo;
 
+import br.com.empresa.ressarcimento.processamento.domain.ProcessamentoRessarcimento;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -36,6 +37,10 @@ public class AuditoriaProdutoVendido {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "execucao_id", nullable = false)
     private ExecucaoFluxoPedido execucao;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "processamento_ressarcimento_id", nullable = false)
+    private ProcessamentoRessarcimento processamentoRessarcimento;
 
     @Column(name = "cod_interno_produto", nullable = false, length = 60)
     private String codInternoProduto;

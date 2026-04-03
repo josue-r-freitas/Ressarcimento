@@ -1,8 +1,10 @@
 package br.com.empresa.ressarcimento.pedidos.fluxo;
 
+import br.com.empresa.ressarcimento.processamento.domain.ProcessamentoRessarcimento;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.ForeignKey;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -33,6 +35,13 @@ public class AuditoriaEntradaConsumida {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "auditoria_produto_id", nullable = false)
     private AuditoriaProdutoVendido auditoriaProduto;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+            name = "processamento_ressarcimento_id",
+            nullable = false,
+            foreignKey = @ForeignKey(name = "fk_aud_ent_cons_proc_ress"))
+    private ProcessamentoRessarcimento processamentoRessarcimento;
 
     @Column(name = "chave_nfe_entrada", nullable = false, columnDefinition = "CHAR(44)")
     private String chaveNfeEntrada;

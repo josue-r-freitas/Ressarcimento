@@ -6,6 +6,7 @@ import br.com.empresa.ressarcimento.planilhas.dto.ResumoNfLinhaDTO;
 import br.com.empresa.ressarcimento.produtos.api.GerarPlanilhaAutomaticaRequest;
 import br.com.empresa.ressarcimento.produtos.api.LogGeracaoPlanilhaDTO;
 import br.com.empresa.ressarcimento.produtos.api.ResultadoGeracaoPlanilhaAutomatica;
+import br.com.empresa.ressarcimento.processamento.ProcessamentoRessarcimentoLifecycle;
 import br.com.empresa.ressarcimento.processamento.ProcessamentoRessarcimentoRepository;
 import br.com.empresa.ressarcimento.produtos.automatizado.domain.LogGeracaoPlanilha;
 import br.com.empresa.ressarcimento.produtos.automatizado.efd.C170Linha;
@@ -21,6 +22,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.FileTime;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -49,6 +51,7 @@ public class ProdutoPlanilhaAutomaticaService {
     private final EscritorPlanilhaProdutosExcel escritorPlanilhaProdutosExcel;
     private final LogGeracaoPlanilhaRepository logRepository;
     private final ProcessamentoRessarcimentoRepository processamentoRessarcimentoRepository;
+    private final ProcessamentoRessarcimentoLifecycle processamentoRessarcimentoLifecycle;
 
     @Transactional
     public ResultadoGeracaoPlanilhaAutomatica gerarPlanilhaAutomatica(GerarPlanilhaAutomaticaRequest req)
@@ -109,6 +112,13 @@ public class ProdutoPlanilhaAutomaticaService {
 
         linhasResumo = filtrarPorPeriodo(linhasResumo, r.getAnoReferencia(), r.getMesReferencia());
 
+        LocalDate hoje = LocalDate.now();
+        int anoEfetivo = r.getAnoReferencia() != null ? r.getAnoReferencia() : hoje.getYear();
+        int mesEfetivo = r.getMesReferencia() != null ? r.getMesReferencia() : hoje.getMonthValue();
+        long pidResolvido = processamentoRessarcimentoId != null
+                ? processamentoRessarcimentoId
+                : processamentoRessarcimentoLifecycle.iniciarEmAndamento(anoEfetivo, mesEfetivo).getId();
+
         List<LogGeracaoPlanilha> logs = new ArrayList<>();
         LocalDateTime agora = LocalDateTime.now();
 
@@ -123,7 +133,7 @@ public class ProdutoPlanilhaAutomaticaService {
 
             if (chave.length() != 44 || !chave.chars().allMatch(Character::isDigit)) {
                 rejeitadas++;
-                logs.add(log(processamentoRessarcimentoId,
+                logs.add(log(pidResolvido,
                         TipoLogGeracaoPlanilha.DADO_INVALIDO,
                         chave.length() == 44 ? chave : null,
                         seq > 0 ? seq : null,
@@ -134,7 +144,7 @@ public class ProdutoPlanilhaAutomaticaService {
             }
             if (seq <= 0) {
                 rejeitadas++;
-                logs.add(log(processamentoRessarcimentoId,
+                logs.add(log(pidResolvido,
                         TipoLogGeracaoPlanilha.DADO_INVALIDO,
                         chave,
                         null,
@@ -146,7 +156,7 @@ public class ProdutoPlanilhaAutomaticaService {
             String cnpj = linha.getCnpjFornecedor();
             if (cnpj.length() != 14 || !cnpj.chars().allMatch(Character::isDigit)) {
                 rejeitadas++;
-                logs.add(log(processamentoRessarcimentoId,
+                logs.add(log(pidResolvido,
                         TipoLogGeracaoPlanilha.DADO_INVALIDO,
                         chave,
                         seq,
@@ -158,7 +168,7 @@ public class ProdutoPlanilhaAutomaticaService {
             String codg = linha.getCodgItem();
             if (!StringUtils.hasText(codg)) {
                 rejeitadas++;
-                logs.add(log(processamentoRessarcimentoId,
+                logs.add(log(pidResolvido,
                         TipoLogGeracaoPlanilha.DADO_INVALIDO,
                         chave,
                         seq,
@@ -171,7 +181,7 @@ public class ProdutoPlanilhaAutomaticaService {
             var notaOpt = indice.notaEntradaPorChave(chave);
             if (notaOpt.isEmpty()) {
                 rejeitadas++;
-                logs.add(log(processamentoRessarcimentoId,
+                logs.add(log(pidResolvido,
                         TipoLogGeracaoPlanilha.NOTA_NAO_ENCONTRADA_EFD,
                         chave,
                         seq,
@@ -183,7 +193,7 @@ public class ProdutoPlanilhaAutomaticaService {
             var c170Opt = notaOpt.get().findItem(seq);
             if (c170Opt.isEmpty()) {
                 rejeitadas++;
-                logs.add(log(processamentoRessarcimentoId,
+                logs.add(log(pidResolvido,
                         TipoLogGeracaoPlanilha.ITEM_NAO_ENCONTRADO_NO_EFD,
                         chave,
                         seq,
@@ -197,7 +207,7 @@ public class ProdutoPlanilhaAutomaticaService {
                     indice.infoItem(c170.codItem()).orElse(null);
             if (info0200 == null || !StringUtils.hasText(info0200.getDescrItem())) {
                 rejeitadas++;
-                logs.add(log(processamentoRessarcimentoId,
+                logs.add(log(pidResolvido,
                         TipoLogGeracaoPlanilha.DADO_INVALIDO,
                         chave,
                         seq,
@@ -221,7 +231,7 @@ public class ProdutoPlanilhaAutomaticaService {
                 unidadeInternaEfd = c170.unid();
             }
             if (StringUtils.hasText(unidadeInternaEfd) && !indice.existeUnidade0190(unidadeInternaEfd)) {
-                logs.add(log(processamentoRessarcimentoId,
+                logs.add(log(pidResolvido,
                         TipoLogGeracaoPlanilha.DADO_INVALIDO,
                         chave,
                         seq,
@@ -235,7 +245,7 @@ public class ProdutoPlanilhaAutomaticaService {
             try {
                 var xmlOpt = leitorNfeUcom.localizarArquivoXml(dirNfes, chave);
                 if (xmlOpt.isEmpty()) {
-                    logs.add(log(processamentoRessarcimentoId,
+                    logs.add(log(pidResolvido,
                             TipoLogGeracaoPlanilha.XML_NFE_NAO_ENCONTRADO,
                             chave,
                             seq,
@@ -248,7 +258,7 @@ public class ProdutoPlanilhaAutomaticaService {
                     try {
                         var uOpt = leitorNfeUcom.extrairUcom(xmlNfe, seq, codg);
                         if (uOpt.isEmpty()) {
-                            logs.add(log(processamentoRessarcimentoId,
+                            logs.add(log(pidResolvido,
                                     TipoLogGeracaoPlanilha.DADO_INVALIDO,
                                     chave,
                                     seq,
@@ -259,7 +269,7 @@ public class ProdutoPlanilhaAutomaticaService {
                         } else {
                             String rawU = uOpt.get().trim();
                             if (!uComDaNFeUtilizavel(rawU)) {
-                                logs.add(log(processamentoRessarcimentoId,
+                                logs.add(log(pidResolvido,
                                         TipoLogGeracaoPlanilha.DADO_INVALIDO,
                                         chave,
                                         seq,
@@ -272,7 +282,7 @@ public class ProdutoPlanilhaAutomaticaService {
                             }
                         }
                     } catch (Exception e) {
-                        logs.add(log(processamentoRessarcimentoId,
+                        logs.add(log(pidResolvido,
                                 TipoLogGeracaoPlanilha.DADO_INVALIDO,
                                 chave,
                                 seq,
@@ -283,7 +293,7 @@ public class ProdutoPlanilhaAutomaticaService {
                     }
                 }
             } catch (IOException e) {
-                logs.add(log(processamentoRessarcimentoId,
+                logs.add(log(pidResolvido,
                         TipoLogGeracaoPlanilha.XML_NFE_NAO_ENCONTRADO,
                         chave,
                         seq,
@@ -363,7 +373,7 @@ public class ProdutoPlanilhaAutomaticaService {
     private static final int ARQUIVO_ORIGEM_MAX = 500;
 
     private LogGeracaoPlanilha log(
-            Long processamentoRessarcimentoId,
+            long processamentoRessarcimentoId,
             TipoLogGeracaoPlanilha tipo,
             String chave,
             Integer numItem,
@@ -374,18 +384,16 @@ public class ProdutoPlanilhaAutomaticaService {
         if (origem != null && origem.length() > ARQUIVO_ORIGEM_MAX) {
             origem = origem.substring(0, ARQUIVO_ORIGEM_MAX - 3) + "...";
         }
-        LogGeracaoPlanilha.LogGeracaoPlanilhaBuilder b = LogGeracaoPlanilha.builder()
+        return LogGeracaoPlanilha.builder()
                 .tipo(tipo.name())
                 .chaveNfe(chave)
                 .numItem(numItem)
                 .arquivoOrigem(origem)
                 .mensagem(mensagem)
-                .dataProcessamento(data);
-        if (processamentoRessarcimentoId != null) {
-            b.processamentoRessarcimento(
-                    processamentoRessarcimentoRepository.getReferenceById(processamentoRessarcimentoId));
-        }
-        return b.build();
+                .dataProcessamento(data)
+                .processamentoRessarcimento(
+                        processamentoRessarcimentoRepository.getReferenceById(processamentoRessarcimentoId))
+                .build();
     }
 
     /**

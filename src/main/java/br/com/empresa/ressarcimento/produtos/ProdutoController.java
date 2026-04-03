@@ -144,8 +144,9 @@ public class ProdutoController {
     }
 
     @PostMapping("/gerar-xml")
-    public ResponseEntity<byte[]> gerarXml() throws JAXBException {
-        byte[] xml = service.gerarXml();
+    public ResponseEntity<byte[]> gerarXml(@RequestParam("processamentoRessarcimentoId") long processamentoRessarcimentoId)
+            throws JAXBException {
+        byte[] xml = service.gerarXml(processamentoRessarcimentoId);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=enviProdutoRessarcimento.xml")
                 .contentType(MediaType.APPLICATION_XML)

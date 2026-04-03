@@ -1,5 +1,7 @@
 package br.com.empresa.ressarcimento.ui;
 
+import br.com.empresa.ressarcimento.declarante.DeclaranteService;
+import br.com.empresa.ressarcimento.processamento.ProcessamentoRessarcimentoRepository;
 import br.com.empresa.ressarcimento.produtos.ProdutoService;
 import br.com.empresa.ressarcimento.produtos.api.GerarPlanilhaAutomaticaRequest;
 import br.com.empresa.ressarcimento.produtos.api.PlanilhaAutomaticaMetricasHeaders;
@@ -10,6 +12,7 @@ import jakarta.xml.bind.JAXBException;
 import java.io.IOException;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpHeaders;
@@ -36,6 +39,8 @@ public class UiProdutoController {
 
     private final ProdutoService produtoService;
     private final ProdutoPlanilhaAutomaticaService planilhaAutomaticaService;
+    private final DeclaranteService declaranteService;
+    private final ProcessamentoRessarcimentoRepository processamentoRessarcimentoRepository;
 
     @GetMapping
     public String importar(Model model) {
@@ -79,13 +84,18 @@ public class UiProdutoController {
 
     @GetMapping("/gerar-xml")
     public String gerarXmlForm(Model model) {
+        model.addAttribute(
+                "processamentos",
+                processamentoRessarcimentoRepository.findByDeclaranteIdOrderByDataHoraInicioDesc(
+                        declaranteService.getEntidadeOuLanca().getId(), PageRequest.of(0, 100)));
         model.addAttribute("pageTitle", "Produtos — gerar XML");
         return "ui/produtos/gerar-xml";
     }
 
     @PostMapping("/gerar-xml")
-    public ResponseEntity<byte[]> gerarXml() throws JAXBException {
-        byte[] xml = produtoService.gerarXml();
+    public ResponseEntity<byte[]> gerarXml(@RequestParam("processamentoRessarcimentoId") long processamentoRessarcimentoId)
+            throws JAXBException {
+        byte[] xml = produtoService.gerarXml(processamentoRessarcimentoId);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=enviProdutoRessarcimento.xml")
                 .contentType(MediaType.APPLICATION_XML)

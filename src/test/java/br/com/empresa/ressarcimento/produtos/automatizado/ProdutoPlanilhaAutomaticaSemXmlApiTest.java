@@ -7,10 +7,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import br.com.empresa.ressarcimento.declarante.DeclaranteRepository;
+import br.com.empresa.ressarcimento.declarante.domain.Declarante;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -35,6 +38,23 @@ class ProdutoPlanilhaAutomaticaSemXmlApiTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private DeclaranteRepository declaranteRepository;
+
+    @BeforeEach
+    void garantirDeclarante() {
+        if (declaranteRepository.count() == 0) {
+            declaranteRepository.save(Declarante.builder()
+                    .cnpjRaiz("12345678")
+                    .ieContribuinteDeclarante("123456789")
+                    .razaoSocial("Empresa SemXml Ltda")
+                    .nomeResponsavel("Fulano Silva")
+                    .foneResponsavel("11999999999")
+                    .emailResponsavel("a@b.com")
+                    .build());
+        }
+    }
 
     @DynamicPropertySource
     static void pastasSemXml(DynamicPropertyRegistry r) throws Exception {

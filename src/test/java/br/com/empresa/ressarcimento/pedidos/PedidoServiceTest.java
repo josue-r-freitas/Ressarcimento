@@ -3,6 +3,8 @@ package br.com.empresa.ressarcimento.pedidos;
 import br.com.empresa.ressarcimento.declarante.DeclaranteService;
 import br.com.empresa.ressarcimento.declarante.domain.Declarante;
 import br.com.empresa.ressarcimento.pedidos.domain.NotaSaida;
+import br.com.empresa.ressarcimento.processamento.ProcessamentoRessarcimentoLifecycle;
+import br.com.empresa.ressarcimento.processamento.domain.ProcessamentoRessarcimento;
 import br.com.empresa.ressarcimento.produtos.ProdutoMatrizRepository;
 import br.com.empresa.ressarcimento.shared.exception.DeclaranteNaoEncontradoException;
 import jakarta.xml.bind.JAXBException;
@@ -17,6 +19,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -39,6 +42,8 @@ class PedidoServiceTest {
     private DeclaranteService declaranteService;
     @Mock
     private br.com.empresa.ressarcimento.xml.pedido.GeradorXmlPedidos geradorXml;
+    @Mock
+    private ProcessamentoRessarcimentoLifecycle processamentoRessarcimentoLifecycle;
 
     @InjectMocks
     private PedidoService service;
@@ -55,7 +60,11 @@ class PedidoServiceTest {
         Declarante decl = Declarante.builder().id(1L).cnpjRaiz("12345678").ieContribuinteDeclarante("12345678")
                 .razaoSocial("Teste").nomeResponsavel("A").foneResponsavel("92999999999").emailResponsavel("a@b.com").build();
         when(declaranteService.getEntidadeOuLanca()).thenReturn(decl);
-        NotaSaida nota = NotaSaida.builder().chaveNFe("35200108779811000191550010000000011000000018").build();
+        ProcessamentoRessarcimento proc = mock(ProcessamentoRessarcimento.class);
+        NotaSaida nota = NotaSaida.builder()
+                .chaveNFe("35200108779811000191550010000000011000000018")
+                .processamentoRessarcimento(proc)
+                .build();
         when(notaSaidaRepository.findByDeclaranteIdAndAnoPeriodoReferenciaAndMesPeriodoReferencia(1L, "2024", "01"))
                 .thenReturn(List.of(nota));
         when(geradorXml.gerar(decl, "2024", "01", List.of(nota)))

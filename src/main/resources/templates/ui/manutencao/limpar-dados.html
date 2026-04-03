@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<head th:replace="~{fragments/head :: head}"></head>
+<body class="bg-light">
+<div th:replace="~{fragments/nav :: nav}"></div>
+<main class="container pb-5" style="max-width: 40rem;">
+    <h1 class="h4 mb-3" th:text="${pageTitle}">Limpar dados</h1>
+
+    <div th:if="${limparSuccess}" class="alert alert-success" role="alert">
+        Tabelas operacionais foram esvaziadas. O cadastro do <strong>declarante</strong> foi mantido.
+    </div>
+    <div th:if="${limparError}" class="alert alert-danger" role="alert" th:text="${limparError}">Erro</div>
+
+    <div class="alert alert-warning" role="alert">
+        <strong>Atenção:</strong> esta ação remove produtos, notas, arquivos XML gerados, processamentos, execuções do
+        Fluxo B, logs de planilha e staging de auditoria. <strong>Não</strong> remove registros da tabela
+        <code>declarante</code>.
+    </div>
+
+    <form th:action="@{/ui/manutencao/limpar-dados}" method="post" class="card shadow-sm border-danger">
+        <div class="card-body">
+            <div class="mb-3 form-check">
+                <input class="form-check-input" type="checkbox" name="aceito" id="aceito" value="true"/>
+                <label class="form-check-label" for="aceito">
+                    Compreendo que os dados serão apagados de forma irreversível (exceto declarante).
+                </label>
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="confirmacao">Confirme digitando: <code th:text="${fraseConfirmacao}">LIMPAR TUDO</code></label>
+                <input class="form-control" type="text" name="confirmacao" id="confirmacao" autocomplete="off"
+                       th:placeholder="${fraseConfirmacao}"/>
+            </div>
+        </div>
+        <div class="card-footer bg-transparent">
+            <button type="submit" class="btn btn-danger">Executar limpeza</button>
+            <a class="btn btn-outline-secondary ms-2" th:href="@{/ui}">Cancelar</a>
+        </div>
+    </form>
+</main>
+<th:block th:replace="~{fragments/scripts :: bootstrap}"></th:block>
+</body>
+</html>

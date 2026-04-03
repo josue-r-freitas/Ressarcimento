@@ -59,6 +59,6 @@ public class ArquivoPedido {
     private ExecucaoFluxoPedido execucaoFluxoPedido;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "processamento_ressarcimento_id")
+    @JoinColumn(name = "processamento_ressarcimento_id", nullable = false)
     private ProcessamentoRessarcimento processamentoRessarcimento;
 }

@@ -1,7 +1,5 @@
 package br.com.empresa.ressarcimento.processamento;
 
-import br.com.empresa.ressarcimento.declarante.DeclaranteService;
-import br.com.empresa.ressarcimento.declarante.domain.Declarante;
 import br.com.empresa.ressarcimento.pedidos.api.GerarPedidoAutomaticoResponse;
 import br.com.empresa.ressarcimento.pedidos.fluxo.FluxoPedidoAutomaticoService;
 import br.com.empresa.ressarcimento.processamento.domain.ProcessamentoRessarcimento;
@@ -27,24 +25,14 @@ public class ProcessamentoRessarcimentoService {
     private static final int MENSAGEM_ERRO_MAX = 2000;
 
     private final ProcessamentoRessarcimentoRepository processamentoRepository;
-    private final DeclaranteService declaranteService;
+    private final ProcessamentoRessarcimentoLifecycle processamentoRessarcimentoLifecycle;
     private final ProdutoPlanilhaAutomaticaService produtoPlanilhaAutomaticaService;
     private final ProdutoService produtoService;
     private final FluxoPedidoAutomaticoService fluxoPedidoAutomaticoService;
 
     @Transactional
     public ProcessamentoRessarcimento iniciar(int ano, int mes) {
-        Declarante decl = declaranteService.getEntidadeOuLanca();
-        String anoStr = String.format("%04d", ano);
-        String mesStr = mes >= 1 && mes <= 9 ? "0" + mes : String.valueOf(mes);
-        ProcessamentoRessarcimento p = ProcessamentoRessarcimento.builder()
-                .declarante(decl)
-                .anoReferencia(anoStr)
-                .mesReferencia(mesStr)
-                .dataHoraInicio(LocalDateTime.now())
-                .statusExecucao(ProcessamentoRessarcimento.STATUS_EM_ANDAMENTO)
-                .build();
-        return processamentoRepository.save(p);
+        return processamentoRessarcimentoLifecycle.iniciarEmAndamento(ano, mes);
     }
 
     @Transactional
@@ -88,7 +76,7 @@ public class ProcessamentoRessarcimentoService {
                 throw new IllegalStateException("Geração da planilha automática não produziu conteúdo XLSX.");
             }
             try (ByteArrayInputStream in = new ByteArrayInputStream(xlsx)) {
-                ResultadoImportacaoDTO imp = produtoService.importar(in, "planilha_produtos.xlsx");
+                ResultadoImportacaoDTO imp = produtoService.importar(in, "planilha_produtos.xlsx", pid);
                 if (imp.getTotalLinhasComErro() > 0) {
                     throw new IllegalStateException(
                             "Importação da matriz de produtos falhou: " + imp.getTotalLinhasComErro() + " linha(s) com erro.");

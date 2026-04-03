@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
 import br.com.empresa.ressarcimento.declarante.DeclaranteService;
+import br.com.empresa.ressarcimento.processamento.ProcessamentoRessarcimentoRepository;
 import br.com.empresa.ressarcimento.declarante.api.DeclaranteDTO;
 import br.com.empresa.ressarcimento.produtos.ProdutoService;
 import br.com.empresa.ressarcimento.produtos.automatizado.ProdutoPlanilhaAutomaticaService;
@@ -43,6 +44,9 @@ class UiMvcTest {
 
     @MockBean
     private ProdutoPlanilhaAutomaticaService planilhaAutomaticaService;
+
+    @MockBean
+    private ProcessamentoRessarcimentoRepository processamentoRessarcimentoRepository;
 
     @Test
     void homeReturnsOk() throws Exception {

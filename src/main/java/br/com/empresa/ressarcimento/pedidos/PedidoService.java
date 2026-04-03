@@ -9,6 +9,8 @@ import br.com.empresa.ressarcimento.pedidos.domain.ItemNotaSaida;
 import br.com.empresa.ressarcimento.pedidos.domain.NotaEntrada;
 import br.com.empresa.ressarcimento.pedidos.domain.NotaSaida;
 import br.com.empresa.ressarcimento.planilhas.LeitorPlanilhaOperacoes;
+import br.com.empresa.ressarcimento.processamento.ProcessamentoRessarcimentoLifecycle;
+import br.com.empresa.ressarcimento.processamento.domain.ProcessamentoRessarcimento;
 import br.com.empresa.ressarcimento.planilhas.dto.OperacaoPlanilhaDTO;
 import br.com.empresa.ressarcimento.produtos.ProdutoMatrizRepository;
 import br.com.empresa.ressarcimento.produtos.domain.ProdutoMatriz;
@@ -23,6 +25,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -43,6 +46,7 @@ public class PedidoService {
     private final ValidacaoPlanilhaOperacoes validacaoPlanilha;
     private final DeclaranteService declaranteService;
     private final GeradorXmlPedidos geradorXml;
+    private final ProcessamentoRessarcimentoLifecycle processamentoRessarcimentoLifecycle;
 
     @Transactional
     public ResultadoImportacaoDTO importar(MultipartFile arquivo) throws IOException {
@@ -96,30 +100,55 @@ public class PedidoService {
         }
 
         Declarante declarante = declaranteService.getEntidadeOuLanca();
+        int anoProc = Integer.parseInt(anoRef.trim());
+        int mesProc = Integer.parseInt(mesRef.trim());
+        ProcessamentoRessarcimento proc =
+                processamentoRessarcimentoLifecycle.iniciarEmAndamento(anoProc, mesProc);
+
         Map<String, NotaSaida> notasPorChave = new LinkedHashMap<>();
         for (OperacaoPlanilhaDTO dto : linhas) {
-            NotaSaida nota = notasPorChave.computeIfAbsent(dto.getChaveNfeSaida(), chave ->
-                    notaSaidaRepository.findByChaveNFe(chave).orElseGet(() -> {
-                        NotaSaida n = NotaSaida.builder()
-                                .declarante(declarante)
-                                .chaveNFe(chave)
-                                .anoPeriodoReferencia(dto.getAnoReferencia())
-                                .mesPeriodoReferencia(dto.getMesReferencia())
-                                .build();
+            NotaSaida nota = notasPorChave.computeIfAbsent(dto.getChaveNfeSaida(), chave -> {
+                Optional<NotaSaida> existente = notaSaidaRepository.findByChaveNFe(chave);
+                if (existente.isPresent()) {
+                    NotaSaida n = existente.get();
+                    ProcessamentoRessarcimento procAtual = n.getProcessamentoRessarcimento();
+                    Long procId = procAtual == null ? null : procAtual.getId();
+                    if (!proc.getId().equals(procId)) {
+                        n.setProcessamentoRessarcimento(proc);
                         return notaSaidaRepository.save(n);
-                    }));
+                    }
+                    return n;
+                }
+                NotaSaida n = NotaSaida.builder()
+                        .declarante(declarante)
+                        .chaveNFe(chave)
+                        .anoPeriodoReferencia(dto.getAnoReferencia())
+                        .mesPeriodoReferencia(dto.getMesReferencia())
+                        .processamentoRessarcimento(proc)
+                        .build();
+                return notaSaidaRepository.save(n);
+            });
             ProdutoMatriz produto = produtoMatrizRepository.findByCodInternoProduto(dto.getCodInternoProduto()).stream().findFirst().orElse(null);
             NotaEntrada notaEntrada = null;
             if (dto.getChaveNfeEntrada() != null && !dto.getChaveNfeEntrada().isBlank()) {
-                notaEntrada = notaEntradaRepository.findByChaveNFeEntrada(dto.getChaveNfeEntrada())
-                        .orElseGet(() -> {
-                            NotaEntrada ne = NotaEntrada.builder()
-                                    .chaveNFeEntrada(dto.getChaveNfeEntrada())
-                                    .chaveCTeEntrada(blankToNull(dto.getChaveCteEntrada()))
-                                    .chaveMDFeEntrada(blankToNull(dto.getChaveMdfeEntrada()))
-                                    .build();
-                            return notaEntradaRepository.save(ne);
-                        });
+                String chaveNe = dto.getChaveNfeEntrada().trim();
+                Optional<NotaEntrada> neOpt = notaEntradaRepository.findByChaveNFeEntrada(chaveNe);
+                if (neOpt.isPresent()) {
+                    notaEntrada = neOpt.get();
+                    ProcessamentoRessarcimento procNe = notaEntrada.getProcessamentoRessarcimento();
+                    Long procNeId = procNe == null ? null : procNe.getId();
+                    if (!proc.getId().equals(procNeId)) {
+                        notaEntrada.setProcessamentoRessarcimento(proc);
+                        notaEntrada = notaEntradaRepository.save(notaEntrada);
+                    }
+                } else {
+                    notaEntrada = notaEntradaRepository.save(NotaEntrada.builder()
+                            .chaveNFeEntrada(chaveNe)
+                            .chaveCTeEntrada(blankToNull(dto.getChaveCteEntrada()))
+                            .chaveMDFeEntrada(blankToNull(dto.getChaveMdfeEntrada()))
+                            .processamentoRessarcimento(proc)
+                            .build());
+                }
             }
             int numItem = Integer.parseInt(dto.getNumItemNfe().trim());
             ItemNotaSaida item = ItemNotaSaida.builder()
@@ -207,6 +236,11 @@ public class PedidoService {
                             + "Em «Pedidos — importar», envie primeiro a planilha de operações com o mesmo ano/mês; "
                             + "use mês com dois dígitos (ex.: 01) se ainda não aparecer dados.");
         }
+        ProcessamentoRessarcimento proc = notas.get(0).getProcessamentoRessarcimento();
+        if (proc == null) {
+            throw new IllegalStateException(
+                    "Notas de saída do período sem processamento de ressarcimento vinculado; reimporte a planilha de operações.");
+        }
         String xml = geradorXml.gerar(declarante, ano, mesNorm, notas);
         ArquivoPedido arquivo = ArquivoPedido.builder()
                 .declarante(declarante)
@@ -215,6 +249,7 @@ public class PedidoService {
                 .dataGeracao(LocalDateTime.now())
                 .status("GERADO")
                 .xmlContent(xml)
+                .processamentoRessarcimento(proc)
                 .build();
         arquivoPedidoRepository.save(arquivo);
         return xml.getBytes(java.nio.charset.StandardCharsets.UTF_8);

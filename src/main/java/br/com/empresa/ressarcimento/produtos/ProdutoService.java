@@ -8,7 +8,9 @@ import br.com.empresa.ressarcimento.planilhas.LeitorPlanilhaProdutos;
 import br.com.empresa.ressarcimento.planilhas.dto.ProdutoPlanilhaDTO;
 import br.com.empresa.ressarcimento.produtos.api.ProdutoDTO;
 import br.com.empresa.ressarcimento.produtos.api.ArquivoProdutosDTO;
+import br.com.empresa.ressarcimento.processamento.ProcessamentoRessarcimentoLifecycle;
 import br.com.empresa.ressarcimento.processamento.ProcessamentoRessarcimentoRepository;
+import br.com.empresa.ressarcimento.processamento.domain.ProcessamentoRessarcimento;
 import br.com.empresa.ressarcimento.produtos.domain.ArquivoProdutos;
 import br.com.empresa.ressarcimento.produtos.domain.ProdutoMatriz;
 import br.com.empresa.ressarcimento.shared.api.ErroPlanilhaDTO;
@@ -17,6 +19,7 @@ import br.com.empresa.ressarcimento.xml.produto.GeradorXmlProdutos;
 import jakarta.xml.bind.JAXBException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -42,6 +45,7 @@ public class ProdutoService {
     private final DeclaranteService declaranteService;
     private final GeradorXmlProdutos geradorXml;
     private final ProcessamentoRessarcimentoRepository processamentoRessarcimentoRepository;
+    private final ProcessamentoRessarcimentoLifecycle processamentoRessarcimentoLifecycle;
     private final FluxoBAuditStagingService fluxoBAuditStagingService;
 
     @Transactional
@@ -55,6 +59,13 @@ public class ProdutoService {
     /** Importação a partir de fluxo programático (ex.: pipeline Processar Ressarcimento). */
     @Transactional
     public ResultadoImportacaoDTO importar(InputStream inputStream, String nomeArquivoOriginal) throws IOException {
+        return importar(inputStream, nomeArquivoOriginal, null);
+    }
+
+    @Transactional
+    public ResultadoImportacaoDTO importar(
+            InputStream inputStream, String nomeArquivoOriginal, Long processamentoRessarcimentoId)
+            throws IOException {
         String nome = nomeArquivoOriginal != null ? nomeArquivoOriginal.toLowerCase() : "";
         List<ProdutoPlanilhaDTO> linhas;
         if (nome.endsWith(".csv")) {
@@ -103,7 +114,15 @@ public class ProdutoService {
         fluxoBAuditStagingService.limparStaging();
         itemNotaSaidaRepository.desvincularProdutosMatriz();
         produtoRepository.deleteAllInBatch();
+        ProcessamentoRessarcimento procRef;
+        if (processamentoRessarcimentoId != null) {
+            procRef = processamentoRessarcimentoRepository.getReferenceById(processamentoRessarcimentoId);
+        } else {
+            LocalDate hoje = LocalDate.now();
+            procRef = processamentoRessarcimentoLifecycle.iniciarEmAndamento(hoje.getYear(), hoje.getMonthValue());
+        }
         for (ProdutoMatriz p : aPersistir) {
+            p.setProcessamentoRessarcimento(procRef);
             produtoRepository.save(p);
         }
         return ResultadoImportacaoDTO.builder()
@@ -142,43 +161,27 @@ public class ProdutoService {
     }
 
     @Transactional
-    public byte[] gerarXml() throws JAXBException {
-        return gerarXml(null);
-    }
-
-    @Transactional
-    public byte[] gerarXml(Long processamentoRessarcimentoId) throws JAXBException {
+    public byte[] gerarXml(long processamentoRessarcimentoId) throws JAXBException {
         ArquivoProdutos salvo = persistirGeracaoXml(processamentoRessarcimentoId);
         return salvo.getXmlContent().getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 
     /** Persiste o XML de produtos e devolve o id do registo em {@code arquivo_produtos} (ex.: pós-pipeline). */
     @Transactional
-    public Long gerarXmlRetornandoIdArquivo(Long processamentoRessarcimentoId) throws JAXBException {
+    public Long gerarXmlRetornandoIdArquivo(long processamentoRessarcimentoId) throws JAXBException {
         return persistirGeracaoXml(processamentoRessarcimentoId).getId();
     }
 
-    private ArquivoProdutos persistirGeracaoXml(Long processamentoRessarcimentoId) throws JAXBException {
+    private ArquivoProdutos persistirGeracaoXml(long processamentoRessarcimentoId) throws JAXBException {
         Declarante declarante = declaranteService.getEntidadeOuLanca();
-        List<String> codigosEmNotas;
-        if (processamentoRessarcimentoId != null) {
-            codigosEmNotas = itemNotaSaidaRepository.findDistinctCodInternoProdutoByNotaSaidaDeclaranteIdAndProcessamentoId(
-                    declarante.getId(), processamentoRessarcimentoId);
-        } else {
-            codigosEmNotas =
-                    itemNotaSaidaRepository.findDistinctCodInternoProdutoByNotaSaidaDeclaranteId(declarante.getId());
-        }
+        List<String> codigosEmNotas = itemNotaSaidaRepository.findDistinctCodInternoProdutoByNotaSaidaDeclaranteIdAndProcessamentoId(
+                declarante.getId(), processamentoRessarcimentoId);
         if (codigosEmNotas.isEmpty()) {
-            if (processamentoRessarcimentoId != null) {
-                throw new IllegalArgumentException(
-                        "Não há códigos de produto em itens de notas de saída deste processamento "
-                                + "(nota_saida.processamento_ressarcimento_id = "
-                                + processamentoRessarcimentoId
-                                + "). Verifique se as NF-e de saída foram gravadas para este processamento.");
-            }
             throw new IllegalArgumentException(
-                    "Não há códigos de produto em itens de notas de saída (item_nota_saida) para este declarante. "
-                            + "Importe ou gere as operações de pedidos (nota_saida / item_nota_saida) antes de gerar o XML de produtos.");
+                    "Não há códigos de produto em itens de notas de saída deste processamento "
+                            + "(nota_saida.processamento_ressarcimento_id = "
+                            + processamentoRessarcimentoId
+                            + "). Verifique se as NF-e de saída foram gravadas para este processamento.");
         }
         List<ProdutoMatriz> candidatos =
                 produtoRepository.findByCodInternoProdutoInOrderByCodInternoProduto(codigosEmNotas);
@@ -202,16 +205,15 @@ public class ProdutoService {
                 .map(umPorCodigo::get)
                 .toList();
         String xml = geradorXml.gerar(declarante, produtos);
-        ArquivoProdutos.ArquivoProdutosBuilder b = ArquivoProdutos.builder()
+        ArquivoProdutos salvo = ArquivoProdutos.builder()
                 .declarante(declarante)
                 .dataGeracao(LocalDateTime.now())
                 .status("GERADO")
-                .xmlContent(xml);
-        if (processamentoRessarcimentoId != null) {
-            b.processamentoRessarcimento(
-                    processamentoRessarcimentoRepository.getReferenceById(processamentoRessarcimentoId));
-        }
-        return arquivoRepository.save(b.build());
+                .xmlContent(xml)
+                .processamentoRessarcimento(
+                        processamentoRessarcimentoRepository.getReferenceById(processamentoRessarcimentoId))
+                .build();
+        return arquivoRepository.save(salvo);
     }
 
     @Transactional(readOnly = true)

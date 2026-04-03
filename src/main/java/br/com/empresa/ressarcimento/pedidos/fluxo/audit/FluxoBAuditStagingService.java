@@ -1,10 +1,12 @@
 package br.com.empresa.ressarcimento.pedidos.fluxo.audit;
 
 import br.com.empresa.ressarcimento.planilhas.dto.ResumoNfLinhaDTO;
+import br.com.empresa.ressarcimento.processamento.domain.ProcessamentoRessarcimento;
 import br.com.empresa.ressarcimento.produtos.automatizado.LeitorNfeUcom;
 import br.com.empresa.ressarcimento.produtos.automatizado.NfeIdeCampos;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.Objects;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -47,8 +49,13 @@ public class FluxoBAuditStagingService {
      * Persiste resumo NF (II): uma nota por chave 44 distinta; uma linha de item por linha da planilha filtrada.
      */
     @Transactional
-    public void persistirEntradasDoResumo(List<ResumoNfLinhaDTO> linhasFiltradas, Path dirNfeEntrada, LeitorNfeUcom leitor)
+    public void persistirEntradasDoResumo(
+            List<ResumoNfLinhaDTO> linhasFiltradas,
+            Path dirNfeEntrada,
+            LeitorNfeUcom leitor,
+            ProcessamentoRessarcimento processamentoRessarcimento)
             throws Exception {
+        Objects.requireNonNull(processamentoRessarcimento, "processamentoRessarcimento");
         Map<String, List<ResumoNfLinhaDTO>> porChave = linhasFiltradas.stream()
                 .filter(l -> l.getChave() != null && l.getChave().length() == 44)
                 .collect(Collectors.groupingBy(ResumoNfLinhaDTO::getChave, LinkedHashMap::new, Collectors.toList()));
@@ -60,6 +67,7 @@ public class FluxoBAuditStagingService {
                     .chaveNFe(chave)
                     .nrNota(primeira.getNrNota())
                     .dataApresentacao(primeira.getDataApresentacao())
+                    .processamentoRessarcimento(processamentoRessarcimento)
                     .build();
 
             Optional<Path> xmlOpt = leitor.localizarArquivoXml(dirNfeEntrada, chave);

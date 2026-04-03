@@ -23,6 +23,7 @@
         <li class="list-group-item"><a th:href="@{/ui/pedidos/gerar-automatico}">Pedidos — gerar XML automático (Fluxo B)</a></li>
         <li class="list-group-item"><a th:href="@{/ui/pedidos/historico}">Pedidos — histórico</a></li>
         <li class="list-group-item"><a href="/swagger-ui.html" target="_blank" rel="noopener">Documentação da API (Swagger)</a></li>
+        <li class="list-group-item"><a class="text-danger" th:href="@{/ui/manutencao/limpar-dados}">Manutenção — limpar dados (exceto declarante)</a></li>
     </ul>
 </main>
 <th:block th:replace="~{fragments/scripts :: bootstrap}"></th:block>

@@ -1,10 +1,14 @@
 package br.com.empresa.ressarcimento.produtos.domain;
 
+import br.com.empresa.ressarcimento.processamento.domain.ProcessamentoRessarcimento;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.Digits;
@@ -75,6 +79,10 @@ public class ProdutoMatriz {
     @NotBlank
     @Size(min = 1, max = 6)
     private String unidadeProdutoFornecedor;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "processamento_ressarcimento_id", nullable = false)
+    private ProcessamentoRessarcimento processamentoRessarcimento;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;

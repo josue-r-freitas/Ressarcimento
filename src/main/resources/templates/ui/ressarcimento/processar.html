@@ -39,7 +39,8 @@
 
         <p class="mb-2 small text-muted">Para gerar novamente com a mesma lógica do botão
             <strong>Baixar XML</strong> em Produtos → Gerar XML (nova gravação no histórico):</p>
-        <form th:action="@{/ui/produtos/gerar-xml}" method="post" class="d-inline">
+        <form th:action="@{/ui/produtos/gerar-xml}" method="post" class="d-inline" th:if="${processamentoId != null}">
+            <input type="hidden" name="processamentoRessarcimentoId" th:value="${processamentoId}"/>
             <button type="submit" class="btn btn-sm btn-outline-secondary">Baixar XML (ação Gerar XML)</button>
         </form>
 

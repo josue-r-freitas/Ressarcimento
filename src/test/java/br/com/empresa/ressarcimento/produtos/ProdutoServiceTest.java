@@ -4,6 +4,7 @@ import br.com.empresa.ressarcimento.declarante.DeclaranteService;
 import br.com.empresa.ressarcimento.declarante.domain.Declarante;
 import br.com.empresa.ressarcimento.pedidos.ItemNotaSaidaRepository;
 import br.com.empresa.ressarcimento.pedidos.fluxo.audit.FluxoBAuditStagingService;
+import br.com.empresa.ressarcimento.processamento.ProcessamentoRessarcimentoLifecycle;
 import br.com.empresa.ressarcimento.processamento.ProcessamentoRessarcimentoRepository;
 import br.com.empresa.ressarcimento.produtos.domain.ArquivoProdutos;
 import br.com.empresa.ressarcimento.produtos.domain.ProdutoMatriz;
@@ -28,6 +29,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -53,6 +55,8 @@ class ProdutoServiceTest {
     @Mock
     private ProcessamentoRessarcimentoRepository processamentoRessarcimentoRepository;
     @Mock
+    private ProcessamentoRessarcimentoLifecycle processamentoRessarcimentoLifecycle;
+    @Mock
     private FluxoBAuditStagingService fluxoBAuditStagingService;
     @Mock
     private MultipartFile arquivo;
@@ -63,7 +67,7 @@ class ProdutoServiceTest {
     @Test
     void gerarXml_lancaQuandoNaoExisteDeclarante() {
         when(declaranteService.getEntidadeOuLanca()).thenThrow(new DeclaranteNaoEncontradoException());
-        assertThatThrownBy(() -> service.gerarXml())
+        assertThatThrownBy(() -> service.gerarXml(1L))
                 .isInstanceOf(DeclaranteNaoEncontradoException.class);
     }
 
@@ -80,14 +84,15 @@ class ProdutoServiceTest {
                 .unidadeProdutoFornecedor("UN")
                 .build();
         when(declaranteService.getEntidadeOuLanca()).thenReturn(decl);
-        when(itemNotaSaidaRepository.findDistinctCodInternoProdutoByNotaSaidaDeclaranteId(1L))
+        when(itemNotaSaidaRepository.findDistinctCodInternoProdutoByNotaSaidaDeclaranteIdAndProcessamentoId(1L, 5L))
                 .thenReturn(List.of("P1"));
         when(produtoRepository.findByCodInternoProdutoInOrderByCodInternoProduto(List.of("P1")))
                 .thenReturn(List.of(p));
         when(geradorXml.gerar(decl, List.of(p))).thenReturn("<?xml version=\"1.0\"?><enviProdutoRessarcimento/>");
+        when(processamentoRessarcimentoRepository.getReferenceById(5L)).thenReturn(mock(ProcessamentoRessarcimento.class));
         when(arquivoRepository.save(any(ArquivoProdutos.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        byte[] result = service.gerarXml();
+        byte[] result = service.gerarXml(5L);
 
         assertThat(result).isNotEmpty();
         verify(arquivoRepository).save(any(ArquivoProdutos.class));
@@ -97,10 +102,10 @@ class ProdutoServiceTest {
     void gerarXml_lancaQuandoNaoHaCodigosEmItemNotaSaida() {
         Declarante decl = Declarante.builder().id(1L).cnpjRaiz("12345678").razaoSocial("Teste").nomeResponsavel("A").foneResponsavel("92999999999").emailResponsavel("a@b.com").ieContribuinteDeclarante("12345678").build();
         when(declaranteService.getEntidadeOuLanca()).thenReturn(decl);
-        when(itemNotaSaidaRepository.findDistinctCodInternoProdutoByNotaSaidaDeclaranteId(1L))
+        when(itemNotaSaidaRepository.findDistinctCodInternoProdutoByNotaSaidaDeclaranteIdAndProcessamentoId(1L, 3L))
                 .thenReturn(List.of());
 
-        assertThatThrownBy(() -> service.gerarXml()).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.gerarXml(3L)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -120,12 +125,12 @@ class ProdutoServiceTest {
     void gerarXml_lancaQuandoCodigoEmNotaSemProdutoNaMatriz() {
         Declarante decl = Declarante.builder().id(1L).cnpjRaiz("12345678").razaoSocial("Teste").nomeResponsavel("A").foneResponsavel("92999999999").emailResponsavel("a@b.com").ieContribuinteDeclarante("12345678").build();
         when(declaranteService.getEntidadeOuLanca()).thenReturn(decl);
-        when(itemNotaSaidaRepository.findDistinctCodInternoProdutoByNotaSaidaDeclaranteId(1L))
+        when(itemNotaSaidaRepository.findDistinctCodInternoProdutoByNotaSaidaDeclaranteIdAndProcessamentoId(1L, 9L))
                 .thenReturn(List.of("FALTANDO"));
         when(produtoRepository.findByCodInternoProdutoInOrderByCodInternoProduto(List.of("FALTANDO")))
                 .thenReturn(List.of());
 
-        assertThatThrownBy(() -> service.gerarXml())
+        assertThatThrownBy(() -> service.gerarXml(9L))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("FALTANDO");
     }
@@ -184,6 +189,8 @@ class ProdutoServiceTest {
         when(arquivo.getOriginalFilename()).thenReturn("planilha.xlsx");
         when(leitorPlanilha.lerExcel(any())).thenReturn(List.of(dto));
         when(produtoRepository.save(any(ProdutoMatriz.class))).thenReturn(p);
+        ProcessamentoRessarcimento procImp = mock(ProcessamentoRessarcimento.class);
+        when(processamentoRessarcimentoLifecycle.iniciarEmAndamento(anyInt(), anyInt())).thenReturn(procImp);
 
         ResultadoImportacaoDTO resultado = service.importar(arquivo);
 

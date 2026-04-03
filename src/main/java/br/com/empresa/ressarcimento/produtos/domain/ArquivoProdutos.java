@@ -48,6 +48,6 @@ public class ArquivoProdutos {
     private String xmlContent;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "processamento_ressarcimento_id")
+    @JoinColumn(name = "processamento_ressarcimento_id", nullable = false)
     private ProcessamentoRessarcimento processamentoRessarcimento;
 }

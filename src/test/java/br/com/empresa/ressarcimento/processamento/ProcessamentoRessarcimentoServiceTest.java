@@ -8,7 +8,6 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import br.com.empresa.ressarcimento.declarante.DeclaranteService;
 import br.com.empresa.ressarcimento.declarante.domain.Declarante;
 import br.com.empresa.ressarcimento.pedidos.api.GerarPedidoAutomaticoResponse;
 import br.com.empresa.ressarcimento.pedidos.fluxo.FluxoPedidoAutomaticoService;
@@ -35,7 +34,7 @@ class ProcessamentoRessarcimentoServiceTest {
     private ProcessamentoRessarcimentoRepository processamentoRepository;
 
     @Mock
-    private DeclaranteService declaranteService;
+    private ProcessamentoRessarcimentoLifecycle processamentoRessarcimentoLifecycle;
 
     @Mock
     private ProdutoPlanilhaAutomaticaService produtoPlanilhaAutomaticaService;
@@ -51,38 +50,36 @@ class ProcessamentoRessarcimentoServiceTest {
 
     @Test
     void iniciar_persisteStatusEmAndamento() {
-        Declarante decl = Declarante.builder().id(1L).build();
-        when(declaranteService.getEntidadeOuLanca()).thenReturn(decl);
-        when(processamentoRepository.save(any(ProcessamentoRessarcimento.class)))
-                .thenAnswer(inv -> {
-                    ProcessamentoRessarcimento p = inv.getArgument(0);
-                    p.setId(100L);
-                    return p;
-                });
+        ProcessamentoRessarcimento p = ProcessamentoRessarcimento.builder()
+                .declarante(Declarante.builder().id(1L).build())
+                .anoReferencia("2024")
+                .mesReferencia("07")
+                .dataHoraInicio(LocalDateTime.now())
+                .statusExecucao(ProcessamentoRessarcimento.STATUS_EM_ANDAMENTO)
+                .build();
+        p.setId(100L);
+        when(processamentoRessarcimentoLifecycle.iniciarEmAndamento(2024, 7)).thenReturn(p);
 
-        ProcessamentoRessarcimento p = service.iniciar(2024, 7);
+        ProcessamentoRessarcimento r = service.iniciar(2024, 7);
 
-        assertThat(p.getId()).isEqualTo(100L);
-        assertThat(p.getAnoReferencia()).isEqualTo("2024");
-        assertThat(p.getMesReferencia()).isEqualTo("07");
-        assertThat(p.getStatusExecucao()).isEqualTo(ProcessamentoRessarcimento.STATUS_EM_ANDAMENTO);
+        assertThat(r.getId()).isEqualTo(100L);
+        assertThat(r.getAnoReferencia()).isEqualTo("2024");
+        assertThat(r.getMesReferencia()).isEqualTo("07");
+        assertThat(r.getStatusExecucao()).isEqualTo(ProcessamentoRessarcimento.STATUS_EM_ANDAMENTO);
     }
 
     @Test
     void executarPipelineCompleto_propagaIdMarcaConcluido() throws IOException, JAXBException {
-        Declarante decl = Declarante.builder().id(1L).build();
-        when(declaranteService.getEntidadeOuLanca()).thenReturn(decl);
-
         ProcessamentoRessarcimento[] holder = new ProcessamentoRessarcimento[1];
-        when(processamentoRepository.save(any(ProcessamentoRessarcimento.class)))
-                .thenAnswer(inv -> {
-                    ProcessamentoRessarcimento p = inv.getArgument(0);
-                    if (p.getId() == null) {
-                        p.setId(42L);
-                    }
-                    holder[0] = p;
-                    return p;
-                });
+        holder[0] = ProcessamentoRessarcimento.builder()
+                .declarante(Declarante.builder().id(1L).build())
+                .anoReferencia("2024")
+                .mesReferencia("07")
+                .dataHoraInicio(LocalDateTime.now())
+                .statusExecucao(ProcessamentoRessarcimento.STATUS_EM_ANDAMENTO)
+                .build();
+        holder[0].setId(42L);
+        when(processamentoRessarcimentoLifecycle.iniciarEmAndamento(2024, 7)).thenReturn(holder[0]);
         when(processamentoRepository.findById(42L)).thenAnswer(inv -> Optional.ofNullable(holder[0]));
 
         ResultadoGeracaoPlanilhaAutomatica planilha = ResultadoGeracaoPlanilhaAutomatica.builder()
@@ -90,7 +87,7 @@ class ProcessamentoRessarcimentoServiceTest {
                 .build();
         when(produtoPlanilhaAutomaticaService.gerarPlanilhaAutomatica(any(GerarPlanilhaAutomaticaRequest.class), eq(42L)))
                 .thenReturn(planilha);
-        when(produtoService.importar(any(), eq("planilha_produtos.xlsx")))
+        when(produtoService.importar(any(), eq("planilha_produtos.xlsx"), eq(42L)))
                 .thenReturn(ResultadoImportacaoDTO.builder()
                         .totalLinhasComErro(0)
                         .totalLinhasProcessadas(1)
@@ -118,19 +115,16 @@ class ProcessamentoRessarcimentoServiceTest {
 
     @Test
     void executarPipelineCompleto_emFalhaMarcaErro() throws IOException {
-        Declarante decl = Declarante.builder().id(1L).build();
-        when(declaranteService.getEntidadeOuLanca()).thenReturn(decl);
-
         ProcessamentoRessarcimento[] holder = new ProcessamentoRessarcimento[1];
-        when(processamentoRepository.save(any(ProcessamentoRessarcimento.class)))
-                .thenAnswer(inv -> {
-                    ProcessamentoRessarcimento p = inv.getArgument(0);
-                    if (p.getId() == null) {
-                        p.setId(7L);
-                    }
-                    holder[0] = p;
-                    return p;
-                });
+        holder[0] = ProcessamentoRessarcimento.builder()
+                .declarante(Declarante.builder().id(1L).build())
+                .anoReferencia("2024")
+                .mesReferencia("01")
+                .dataHoraInicio(LocalDateTime.now())
+                .statusExecucao(ProcessamentoRessarcimento.STATUS_EM_ANDAMENTO)
+                .build();
+        holder[0].setId(7L);
+        when(processamentoRessarcimentoLifecycle.iniciarEmAndamento(2024, 1)).thenReturn(holder[0]);
         when(processamentoRepository.findById(7L)).thenAnswer(inv -> Optional.ofNullable(holder[0]));
 
         when(produtoPlanilhaAutomaticaService.gerarPlanilhaAutomatica(any(GerarPlanilhaAutomaticaRequest.class), eq(7L)))

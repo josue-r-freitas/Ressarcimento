@@ -67,7 +67,7 @@ public class ExecucaoFluxoPedido {
     private String arquivoResumonf;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "processamento_ressarcimento_id")
+    @JoinColumn(name = "processamento_ressarcimento_id", nullable = false)
     private ProcessamentoRessarcimento processamentoRessarcimento;
 
     @OneToMany(mappedBy = "execucao", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)

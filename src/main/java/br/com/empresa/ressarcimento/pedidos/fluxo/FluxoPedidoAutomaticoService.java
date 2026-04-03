@@ -27,6 +27,7 @@ import br.com.empresa.ressarcimento.produtos.automatizado.NfeIdeCampos;
 import br.com.empresa.ressarcimento.produtos.automatizado.efd.C170Linha;
 import br.com.empresa.ressarcimento.produtos.automatizado.efd.EfdIndice;
 import br.com.empresa.ressarcimento.produtos.automatizado.efd.ParserEfdService;
+import br.com.empresa.ressarcimento.processamento.ProcessamentoRessarcimentoLifecycle;
 import br.com.empresa.ressarcimento.processamento.ProcessamentoRessarcimentoRepository;
 import br.com.empresa.ressarcimento.processamento.domain.ProcessamentoRessarcimento;
 import br.com.empresa.ressarcimento.produtos.domain.ProdutoMatriz;
@@ -91,6 +92,7 @@ public class FluxoPedidoAutomaticoService {
     private final ArquivoPedidoRepository arquivoPedidoRepository;
     private final FluxoBAuditStagingService fluxoBAuditStagingService;
     private final ProcessamentoRessarcimentoRepository processamentoRessarcimentoRepository;
+    private final ProcessamentoRessarcimentoLifecycle processamentoRessarcimentoLifecycle;
     private final NotaSaidaRepository notaSaidaRepository;
     private final NotaEntradaRepository notaEntradaRepository;
 
@@ -114,13 +116,16 @@ public class FluxoPedidoAutomaticoService {
 
         fluxoBAuditStagingService.limparStaging();
 
-        ProcessamentoRessarcimento procRef = null;
+        ProcessamentoRessarcimento procRef;
         if (processamentoRessarcimentoId != null) {
             procRef = processamentoRessarcimentoRepository
                     .findById(processamentoRessarcimentoId)
                     .orElseThrow(() -> new IllegalArgumentException(
                             "Processamento de ressarcimento não encontrado: " + processamentoRessarcimentoId));
+        } else {
+            procRef = processamentoRessarcimentoLifecycle.iniciarEmAndamento(ano, mes);
         }
+        Long pidRastreio = procRef.getId();
 
         ExecucaoFluxoPedido exec = ExecucaoFluxoPedido.builder()
                 .declarante(decl)
@@ -165,7 +170,8 @@ public class FluxoPedidoAutomaticoService {
                     .toList();
 
             try {
-                fluxoBAuditStagingService.persistirEntradasDoResumo(linhasResumo, dirNfeEntrada, leitorNfeUcom);
+                fluxoBAuditStagingService.persistirEntradasDoResumo(
+                        linhasResumo, dirNfeEntrada, leitorNfeUcom, procRef);
             } catch (Exception e) {
                 throw new IOException("Falha ao gravar staging de auditoria (resumo NF entrada): " + e.getMessage(), e);
             }
@@ -181,6 +187,7 @@ public class FluxoPedidoAutomaticoService {
                     fluxoBAuditStagingService.salvarNfeSaida(FluxoBAuditNfeSaida.builder()
                             .chaveNFe(chaveSaida)
                             .statusProcessamento(STG_SAIDA_SEM_XML)
+                            .processamentoRessarcimento(procRef)
                             .build());
                     String msg = "XML de NF-e de saída não encontrado para chave " + chaveSaida;
                     avisos.add(msg);
@@ -191,6 +198,7 @@ public class FluxoPedidoAutomaticoService {
                 FluxoBAuditNfeSaida auditSaida = FluxoBAuditNfeSaida.builder()
                         .chaveNFe(chaveSaida)
                         .statusProcessamento(STG_SAIDA_ERRO_LEITURA)
+                        .processamentoRessarcimento(procRef)
                         .build();
                 List<ItemNfeCfop> itensXml;
                 try {
@@ -260,7 +268,7 @@ public class FluxoPedidoAutomaticoService {
                     String codInt = pm.getCodInternoProduto();
 
                     BigDecimal qVenda = converterQuantidadeVenda(ix, pm);
-                    ResultadoConsumoFifo consumo = consumirFifo(qVenda, codInt, estoqueFifo);
+                    ResultadoConsumoFifo consumo = consumirFifo(qVenda, codInt, estoqueFifo, procRef);
 
                     ItemNotaSaida item = ItemNotaSaida.builder()
                             .notaSaida(ns)
@@ -274,6 +282,7 @@ public class FluxoPedidoAutomaticoService {
 
                     AuditoriaProdutoVendido aud = AuditoriaProdutoVendido.builder()
                             .execucao(exec)
+                            .processamentoRessarcimento(procRef)
                             .codInternoProduto(codInt)
                             .chaveNfeSaida(chaveSaida)
                             .numItemNfe(ix.nItem())
@@ -318,7 +327,7 @@ public class FluxoPedidoAutomaticoService {
                     .build();
             arq = arquivoPedidoRepository.save(arq);
 
-            persistirNotasSeRastreio(processamentoRessarcimentoId, decl, notasMontadas);
+            persistirNotasSeRastreio(pidRastreio, decl, notasMontadas);
 
             exec.setDataHoraFim(LocalDateTime.now());
             exec.setStatusExecucao(avisos.isEmpty() ? STATUS_CONCLUIDO : STATUS_CONCLUIDO_AVISOS);
@@ -365,7 +374,7 @@ public class FluxoPedidoAutomaticoService {
      */
     private void persistirNotasSeRastreio(
             Long processamentoRessarcimentoId, Declarante decl, List<NotaSaida> notasMontadas) {
-        if (processamentoRessarcimentoId == null || notasMontadas == null || notasMontadas.isEmpty()) {
+        if (notasMontadas == null || notasMontadas.isEmpty()) {
             return;
         }
         ProcessamentoRessarcimento procRef =
@@ -402,10 +411,21 @@ public class FluxoPedidoAutomaticoService {
                 NotaEntrada ne = null;
                 if (it.getNotaEntrada() != null && StringUtils.hasText(it.getNotaEntrada().getChaveNFeEntrada())) {
                     String chaveEnt = it.getNotaEntrada().getChaveNFeEntrada().trim();
-                    ne = notaEntradaRepository
-                            .findByChaveNFeEntrada(chaveEnt)
-                            .orElseGet(() -> notaEntradaRepository.save(
-                                    NotaEntrada.builder().chaveNFeEntrada(chaveEnt).build()));
+                    Optional<NotaEntrada> neOpt = notaEntradaRepository.findByChaveNFeEntrada(chaveEnt);
+                    if (neOpt.isPresent()) {
+                        ne = neOpt.get();
+                        ProcessamentoRessarcimento procNe = ne.getProcessamentoRessarcimento();
+                        Long procNeId = procNe == null ? null : procNe.getId();
+                        if (!processamentoRessarcimentoId.equals(procNeId)) {
+                            ne.setProcessamentoRessarcimento(procRef);
+                            ne = notaEntradaRepository.save(ne);
+                        }
+                    } else {
+                        ne = notaEntradaRepository.save(NotaEntrada.builder()
+                                .chaveNFeEntrada(chaveEnt)
+                                .processamentoRessarcimento(procRef)
+                                .build());
+                    }
                 }
                 ItemNotaSaida ni = ItemNotaSaida.builder()
                         .notaSaida(persisted)
@@ -524,7 +544,10 @@ public class FluxoPedidoAutomaticoService {
     }
 
     private static ResultadoConsumoFifo consumirFifo(
-            BigDecimal qVendaInterna, String codInterno, Map<String, ArrayDeque<EntradaFifoSlot>> estoque) {
+            BigDecimal qVendaInterna,
+            String codInterno,
+            Map<String, ArrayDeque<EntradaFifoSlot>> estoque,
+            ProcessamentoRessarcimento processamentoRessarcimento) {
         BigDecimal need = qVendaInterna != null ? qVendaInterna : BigDecimal.ZERO;
         if (need.compareTo(BigDecimal.ZERO) < 0) {
             need = BigDecimal.ZERO;
@@ -569,6 +592,7 @@ public class FluxoPedidoAutomaticoService {
                     conv && slot.pm.getFatorConversao() != null ? slot.pm.getFatorConversao() : null;
 
             AuditoriaEntradaConsumida lin = AuditoriaEntradaConsumida.builder()
+                    .processamentoRessarcimento(processamentoRessarcimento)
                     .chaveNfeEntrada(slot.linha.getChave())
                     .seqItem(slot.linha.getSeqItem())
                     .codgItem(blankToNull(slot.linha.getCodgItem()))

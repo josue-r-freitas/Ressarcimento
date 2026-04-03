@@ -1,0 +1,30 @@
+# Perfil para testes de integração contra SQL Server instalado (sem Docker).
+# Ative com RESSARCIMENTO_SQLSERVER_INTEGRATION=true e configure URL/usuário/senha (ver javadoc da classe de teste).
+spring:
+  datasource:
+    url: ${RESSARCIMENTO_DB_URL:jdbc:sqlserver://localhost;databaseName=ressarcimento_integration;encrypt=false;trustServerCertificate=true;loginTimeout=30}
+    driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+    username: ${RESSARCIMENTO_DB_USERNAME:sa}
+    password: ${RESSARCIMENTO_DB_PASSWORD:}
+  jpa:
+    database-platform: org.hibernate.dialect.SQLServerDialect
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: false
+        show_sql: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+logging:
+  level:
+    root: INFO
+    br.com.empresa.ressarcimento: INFO

@@ -33,6 +33,12 @@
                         <li><a class="dropdown-item" th:href="@{/ui/pedidos/historico}">Histórico</a></li>
                     </ul>
                 </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">Manutenção</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item text-danger" th:href="@{/ui/manutencao/limpar-dados}">Limpar dados (exceto declarante)</a></li>
+                    </ul>
+                </li>
                 <li class="nav-item"><a class="nav-link" href="/swagger-ui.html" target="_blank" rel="noopener">Swagger</a></li>
             </ul>
         </div>
