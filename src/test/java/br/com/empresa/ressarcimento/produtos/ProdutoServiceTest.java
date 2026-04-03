@@ -3,6 +3,8 @@ package br.com.empresa.ressarcimento.produtos;
 import br.com.empresa.ressarcimento.declarante.DeclaranteService;
 import br.com.empresa.ressarcimento.declarante.domain.Declarante;
 import br.com.empresa.ressarcimento.pedidos.ItemNotaSaidaRepository;
+import br.com.empresa.ressarcimento.pedidos.fluxo.audit.FluxoBAuditStagingService;
+import br.com.empresa.ressarcimento.processamento.ProcessamentoRessarcimentoRepository;
 import br.com.empresa.ressarcimento.produtos.domain.ArquivoProdutos;
 import br.com.empresa.ressarcimento.produtos.domain.ProdutoMatriz;
 import br.com.empresa.ressarcimento.shared.api.ResultadoImportacaoDTO;
@@ -26,8 +28,12 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import br.com.empresa.ressarcimento.processamento.domain.ProcessamentoRessarcimento;
+import org.mockito.ArgumentCaptor;
 
 @ExtendWith(MockitoExtension.class)
 class ProdutoServiceTest {
@@ -45,6 +51,10 @@ class ProdutoServiceTest {
     @Mock
     private GeradorXmlProdutos geradorXml;
     @Mock
+    private ProcessamentoRessarcimentoRepository processamentoRessarcimentoRepository;
+    @Mock
+    private FluxoBAuditStagingService fluxoBAuditStagingService;
+    @Mock
     private MultipartFile arquivo;
 
     @InjectMocks
@@ -60,15 +70,93 @@ class ProdutoServiceTest {
     @Test
     void gerarXml_geraXmlEPersisteHistorico() throws JAXBException {
         Declarante decl = Declarante.builder().id(1L).cnpjRaiz("12345678").razaoSocial("Teste").nomeResponsavel("A").foneResponsavel("92999999999").emailResponsavel("a@b.com").ieContribuinteDeclarante("12345678").build();
+        ProdutoMatriz p = ProdutoMatriz.builder()
+                .codInternoProduto("P1")
+                .descricaoProduto("Um")
+                .unidadeInternaProduto("UN")
+                .fatorConversao(BigDecimal.ONE)
+                .cnpjFornecedor("12345678901234")
+                .codProdFornecedor("F1")
+                .unidadeProdutoFornecedor("UN")
+                .build();
         when(declaranteService.getEntidadeOuLanca()).thenReturn(decl);
-        when(produtoRepository.findAllByOrderByCodInternoProduto()).thenReturn(List.of());
-        when(geradorXml.gerar(decl, List.of())).thenReturn("<?xml version=\"1.0\"?><enviProdutoRessarcimento/>");
+        when(itemNotaSaidaRepository.findDistinctCodInternoProdutoByNotaSaidaDeclaranteId(1L))
+                .thenReturn(List.of("P1"));
+        when(produtoRepository.findByCodInternoProdutoInOrderByCodInternoProduto(List.of("P1")))
+                .thenReturn(List.of(p));
+        when(geradorXml.gerar(decl, List.of(p))).thenReturn("<?xml version=\"1.0\"?><enviProdutoRessarcimento/>");
         when(arquivoRepository.save(any(ArquivoProdutos.class))).thenAnswer(inv -> inv.getArgument(0));
 
         byte[] result = service.gerarXml();
 
         assertThat(result).isNotEmpty();
         verify(arquivoRepository).save(any(ArquivoProdutos.class));
+    }
+
+    @Test
+    void gerarXml_lancaQuandoNaoHaCodigosEmItemNotaSaida() {
+        Declarante decl = Declarante.builder().id(1L).cnpjRaiz("12345678").razaoSocial("Teste").nomeResponsavel("A").foneResponsavel("92999999999").emailResponsavel("a@b.com").ieContribuinteDeclarante("12345678").build();
+        when(declaranteService.getEntidadeOuLanca()).thenReturn(decl);
+        when(itemNotaSaidaRepository.findDistinctCodInternoProdutoByNotaSaidaDeclaranteId(1L))
+                .thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.gerarXml()).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void gerarXml_comProcessamentoSemItensNaNota_lancaMensagemEspecifica() {
+        Declarante decl = Declarante.builder().id(1L).cnpjRaiz("12345678").razaoSocial("Teste").nomeResponsavel("A").foneResponsavel("92999999999").emailResponsavel("a@b.com").ieContribuinteDeclarante("12345678").build();
+        when(declaranteService.getEntidadeOuLanca()).thenReturn(decl);
+        when(itemNotaSaidaRepository.findDistinctCodInternoProdutoByNotaSaidaDeclaranteIdAndProcessamentoId(1L, 88L))
+                .thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.gerarXml(88L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("deste processamento")
+                .hasMessageContaining("88");
+    }
+
+    @Test
+    void gerarXml_lancaQuandoCodigoEmNotaSemProdutoNaMatriz() {
+        Declarante decl = Declarante.builder().id(1L).cnpjRaiz("12345678").razaoSocial("Teste").nomeResponsavel("A").foneResponsavel("92999999999").emailResponsavel("a@b.com").ieContribuinteDeclarante("12345678").build();
+        when(declaranteService.getEntidadeOuLanca()).thenReturn(decl);
+        when(itemNotaSaidaRepository.findDistinctCodInternoProdutoByNotaSaidaDeclaranteId(1L))
+                .thenReturn(List.of("FALTANDO"));
+        when(produtoRepository.findByCodInternoProdutoInOrderByCodInternoProduto(List.of("FALTANDO")))
+                .thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.gerarXml())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("FALTANDO");
+    }
+
+    @Test
+    void gerarXml_comProcessamento_preencheFkNoHistorico() throws JAXBException {
+        Declarante decl = Declarante.builder().id(1L).cnpjRaiz("12345678").razaoSocial("Teste").nomeResponsavel("A").foneResponsavel("92999999999").emailResponsavel("a@b.com").ieContribuinteDeclarante("12345678").build();
+        ProdutoMatriz p = ProdutoMatriz.builder()
+                .codInternoProduto("P1")
+                .descricaoProduto("Um")
+                .unidadeInternaProduto("UN")
+                .fatorConversao(BigDecimal.ONE)
+                .cnpjFornecedor("12345678901234")
+                .codProdFornecedor("F1")
+                .unidadeProdutoFornecedor("UN")
+                .build();
+        ProcessamentoRessarcimento proc = mock(ProcessamentoRessarcimento.class);
+        when(declaranteService.getEntidadeOuLanca()).thenReturn(decl);
+        when(itemNotaSaidaRepository.findDistinctCodInternoProdutoByNotaSaidaDeclaranteIdAndProcessamentoId(1L, 88L))
+                .thenReturn(List.of("P1"));
+        when(produtoRepository.findByCodInternoProdutoInOrderByCodInternoProduto(List.of("P1")))
+                .thenReturn(List.of(p));
+        when(geradorXml.gerar(decl, List.of(p))).thenReturn("<?xml version=\"1.0\"?><enviProdutoRessarcimento/>");
+        when(processamentoRessarcimentoRepository.getReferenceById(88L)).thenReturn(proc);
+        when(arquivoRepository.save(any(ArquivoProdutos.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.gerarXml(88L);
+
+        ArgumentCaptor<ArquivoProdutos> cap = ArgumentCaptor.forClass(ArquivoProdutos.class);
+        verify(arquivoRepository).save(cap.capture());
+        assertThat(cap.getValue().getProcessamentoRessarcimento()).isSameAs(proc);
     }
 
     @Test
@@ -102,6 +190,7 @@ class ProdutoServiceTest {
         assertThat(resultado.getTotalLinhasProcessadas()).isEqualTo(1);
         assertThat(resultado.getTotalPersistidas()).isEqualTo(1);
         assertThat(resultado.getErros()).isEmpty();
+        verify(fluxoBAuditStagingService).limparStaging();
         verify(itemNotaSaidaRepository).desvincularProdutosMatriz();
         verify(produtoRepository).deleteAllInBatch();
         verify(produtoRepository).save(any(ProdutoMatriz.class));

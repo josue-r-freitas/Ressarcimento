@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
@@ -121,10 +122,11 @@ public class UiProdutoController {
             @RequestParam(required = false) Integer mesReferencia,
             @RequestParam(required = false) String nomeArquivoResumo)
             throws IOException {
+        String nomeResumo = StringUtils.hasText(nomeArquivoResumo) ? nomeArquivoResumo.trim() : "resumonf.xlsx";
         GerarPlanilhaAutomaticaRequest body = GerarPlanilhaAutomaticaRequest.builder()
                 .anoReferencia(anoReferencia)
                 .mesReferencia(mesReferencia)
-                .nomeArquivoResumo(nomeArquivoResumo)
+                .nomeArquivoResumo(nomeResumo)
                 .build();
         ResultadoGeracaoPlanilhaAutomatica resultado = planilhaAutomaticaService.gerarPlanilhaAutomatica(body);
         HttpHeaders metricas = new HttpHeaders();

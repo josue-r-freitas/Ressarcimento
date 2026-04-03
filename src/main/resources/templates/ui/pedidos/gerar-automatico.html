@@ -36,25 +36,45 @@
         e a <strong>matriz de produtos</strong> no banco. NF-e de saída com CFOP <strong>6102</strong> ou
         <strong>6108</strong> no XML.
     </p>
+    <p class="small text-muted" th:if="${anoPrefill != null || mesPrefill != null}">
+        Período sugerido pela URL:
+        <span th:text="${anoPrefill}">—</span> / <span th:text="${mesPrefill}">—</span>
+        (pode alterar antes de enviar).
+    </p>
 
-    <form th:action="@{/ui/pedidos/gerar-automatico}" method="post" class="card shadow-sm">
+    <form th:action="@{/ui/pedidos/gerar-automatico}" method="post" class="card shadow-sm" id="formFluxoB">
         <div class="card-body row g-3">
             <div class="col-md-2">
                 <label class="form-label" for="ano">Ano</label>
                 <input id="ano" class="form-control" type="number" name="ano" required min="2000" max="2100"
-                       placeholder="ex.: 2024"/>
+                       placeholder="ex.: 2024"
+                       th:value="${anoPrefill}"/>
             </div>
             <div class="col-md-2">
                 <label class="form-label" for="mes">Mês</label>
                 <input id="mes" class="form-control" type="number" name="mes" required min="1" max="12"
-                       placeholder="ex.: 11"/>
+                       placeholder="ex.: 11"
+                       th:value="${mesPrefill}"/>
             </div>
         </div>
-        <div class="card-footer">
-            <button type="submit" class="btn btn-primary">Executar Fluxo B</button>
+        <div class="card-footer d-flex align-items-center gap-2">
+            <button type="submit" class="btn btn-primary" id="btnFluxoB">Gerar XML automático (Fluxo B)</button>
+            <span class="text-muted small d-none" id="fluxoProcessando">A executar Fluxo B…</span>
         </div>
     </form>
+    <p class="small text-muted mt-2">
+        Para planilha + importação de produtos + Fluxo B + XML de produtos num único passo, use
+        <a th:href="@{/ui/ressarcimento/processar}">Processar ressarcimento</a>.
+    </p>
 </main>
 <th:block th:replace="~{fragments/scripts :: bootstrap}"></th:block>
+<script>
+    document.getElementById('formFluxoB')?.addEventListener('submit', function () {
+        var b = document.getElementById('btnFluxoB');
+        var m = document.getElementById('fluxoProcessando');
+        if (b) { b.disabled = true; }
+        if (m) m.classList.remove('d-none');
+    });
+</script>
 </body>
 </html>

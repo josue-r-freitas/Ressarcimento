@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<head th:replace="~{fragments/head :: head}"></head>
+<body class="bg-light">
+<div th:replace="~{fragments/nav :: nav}"></div>
+<main class="container pb-5">
+    <h1 class="h4 mb-3" th:text="${pageTitle}">Processar ressarcimento</h1>
+
+    <p class="text-muted">
+        Executa em sequência: geração da planilha de produtos (<code>resumonf.xlsx</code> na pasta configurada),
+        importação da matriz, Fluxo B de pedidos (pastas EFD/XML) e gravação do XML de produtos no histórico.
+        Regista um <strong>processamento de ressarcimento</strong> com id para rastreio.
+    </p>
+
+    <div th:if="${processarError}" class="alert alert-danger" th:text="${processarError}">Erro</div>
+
+    <div th:if="${processarSuccess}" class="alert alert-success">
+        <p class="mb-2"><strong>Processamento concluído.</strong> Id do processamento:
+            <code th:text="${processamentoId}">0</code> · Status Fluxo B:
+            <span th:text="${fluxoBStatus}">OK</span></p>
+        <p class="mb-2 small text-muted">Período: <span th:text="${processarAno}">2024</span> /
+            <span th:text="${processarMes}">1</span></p>
+
+        <p class="mb-2 small">
+            <a th:href="@{/ui/pedidos/gerar-automatico(ano=${processarAno},mes=${processarMes})}">
+                Abrir página Fluxo B com este ano/mês
+            </a>
+        </p>
+        <div class="d-flex flex-wrap gap-2 mb-2">
+            <a th:if="${arquivoPedidoId != null}" class="btn btn-sm btn-primary"
+               th:href="@{/ui/pedidos/historico/{id}/download(id=${arquivoPedidoId})}">
+                Baixar XML de pedidos
+            </a>
+            <a th:if="${arquivoProdutosId != null}" class="btn btn-sm btn-outline-primary"
+               th:href="@{/ui/produtos/historico/{id}/download(id=${arquivoProdutosId})}">
+                Baixar XML de produtos (deste processamento)
+            </a>
+        </div>
+
+        <p class="mb-2 small text-muted">Para gerar novamente com a mesma lógica do botão
+            <strong>Baixar XML</strong> em Produtos → Gerar XML (nova gravação no histórico):</p>
+        <form th:action="@{/ui/produtos/gerar-xml}" method="post" class="d-inline">
+            <button type="submit" class="btn btn-sm btn-outline-secondary">Baixar XML (ação Gerar XML)</button>
+        </form>
+
+        <div th:if="${fluxoBAvisos != null && !fluxoBAvisos.isEmpty()}" class="mt-3">
+            <strong class="small">Avisos do Fluxo B:</strong>
+            <ul class="small mb-0">
+                <li th:each="a : ${fluxoBAvisos}" th:text="${a}">aviso</li>
+            </ul>
+        </div>
+    </div>
+
+    <form th:action="@{/ui/ressarcimento/processar}" method="post" id="formProcessar" class="card shadow-sm">
+        <div class="card-body row g-3">
+            <div class="col-md-2">
+                <label class="form-label" for="ano">Ano de referência</label>
+                <input id="ano" class="form-control" type="number" name="ano" required min="2000" max="2100"
+                       placeholder="ex.: 2024"/>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label" for="mes">Mês de referência</label>
+                <input id="mes" class="form-control" type="number" name="mes" required min="1" max="12"
+                       placeholder="ex.: 11"/>
+            </div>
+        </div>
+        <div class="card-footer d-flex align-items-center gap-2">
+            <button type="submit" class="btn btn-primary" id="btnProcessar">Processar ressarcimento</button>
+            <span class="text-muted small d-none" id="processandoMsg">A processar… pode demorar vários minutos.</span>
+        </div>
+    </form>
+    <p class="small text-muted mt-2">
+        Requer declarante cadastrado e ficheiros nas pastas configuradas
+        (<code>RESSARCIMENTO_*_DIR</code>). Em caso de erro, o processamento fica registado com estado de erro.
+    </p>
+</main>
+<th:block th:replace="~{fragments/scripts :: bootstrap}"></th:block>
+<script>
+    document.getElementById('formProcessar')?.addEventListener('submit', function () {
+        var b = document.getElementById('btnProcessar');
+        var m = document.getElementById('processandoMsg');
+        if (b) { b.disabled = true; b.textContent = 'A processar…'; }
+        if (m) m.classList.remove('d-none');
+    });
+</script>
+</body>
+</html>

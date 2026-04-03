@@ -1,6 +1,7 @@
 package br.com.empresa.ressarcimento.produtos.domain;
 
 import br.com.empresa.ressarcimento.declarante.domain.Declarante;
+import br.com.empresa.ressarcimento.processamento.domain.ProcessamentoRessarcimento;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -45,4 +46,8 @@ public class ArquivoProdutos {
 
     @Column(name = "xml_content", columnDefinition = "NVARCHAR(MAX)")
     private String xmlContent;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "processamento_ressarcimento_id")
+    private ProcessamentoRessarcimento processamentoRessarcimento;
 }

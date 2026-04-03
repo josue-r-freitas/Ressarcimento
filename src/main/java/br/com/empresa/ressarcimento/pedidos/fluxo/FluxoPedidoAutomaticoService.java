@@ -11,6 +11,8 @@ import br.com.empresa.ressarcimento.pedidos.api.GerarPedidoAutomaticoResponse;
 import br.com.empresa.ressarcimento.pedidos.api.RastreabilidadeFluxoDTO;
 import br.com.empresa.ressarcimento.pedidos.domain.ArquivoPedido;
 import br.com.empresa.ressarcimento.pedidos.domain.ItemNotaSaida;
+import br.com.empresa.ressarcimento.pedidos.NotaEntradaRepository;
+import br.com.empresa.ressarcimento.pedidos.NotaSaidaRepository;
 import br.com.empresa.ressarcimento.pedidos.domain.NotaEntrada;
 import br.com.empresa.ressarcimento.pedidos.domain.NotaSaida;
 import br.com.empresa.ressarcimento.pedidos.fluxo.audit.FluxoBAuditItemNfeSaida;
@@ -25,6 +27,8 @@ import br.com.empresa.ressarcimento.produtos.automatizado.NfeIdeCampos;
 import br.com.empresa.ressarcimento.produtos.automatizado.efd.C170Linha;
 import br.com.empresa.ressarcimento.produtos.automatizado.efd.EfdIndice;
 import br.com.empresa.ressarcimento.produtos.automatizado.efd.ParserEfdService;
+import br.com.empresa.ressarcimento.processamento.ProcessamentoRessarcimentoRepository;
+import br.com.empresa.ressarcimento.processamento.domain.ProcessamentoRessarcimento;
 import br.com.empresa.ressarcimento.produtos.domain.ProdutoMatriz;
 import br.com.empresa.ressarcimento.shared.exception.RecursoNaoEncontradoException;
 import br.com.empresa.ressarcimento.xml.pedido.GeradorXmlPedidos;
@@ -86,9 +90,18 @@ public class FluxoPedidoAutomaticoService {
     private final ExecucaoFluxoPedidoRepository execucaoRepository;
     private final ArquivoPedidoRepository arquivoPedidoRepository;
     private final FluxoBAuditStagingService fluxoBAuditStagingService;
+    private final ProcessamentoRessarcimentoRepository processamentoRessarcimentoRepository;
+    private final NotaSaidaRepository notaSaidaRepository;
+    private final NotaEntradaRepository notaEntradaRepository;
 
     @Transactional
     public GerarPedidoAutomaticoResponse gerarAutomatico(int ano, int mes) throws JAXBException, IOException {
+        return gerarAutomatico(ano, mes, null);
+    }
+
+    @Transactional
+    public GerarPedidoAutomaticoResponse gerarAutomatico(int ano, int mes, Long processamentoRessarcimentoId)
+            throws JAXBException, IOException {
         Declarante decl = declaranteService.getEntidadeOuLanca();
         String anoStr = String.format("%04d", ano);
         String mesStr = mes >= 1 && mes <= 9 ? "0" + mes : String.valueOf(mes);
@@ -101,6 +114,14 @@ public class FluxoPedidoAutomaticoService {
 
         fluxoBAuditStagingService.limparStaging();
 
+        ProcessamentoRessarcimento procRef = null;
+        if (processamentoRessarcimentoId != null) {
+            procRef = processamentoRessarcimentoRepository
+                    .findById(processamentoRessarcimentoId)
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "Processamento de ressarcimento não encontrado: " + processamentoRessarcimentoId));
+        }
+
         ExecucaoFluxoPedido exec = ExecucaoFluxoPedido.builder()
                 .declarante(decl)
                 .anoReferencia(anoStr)
@@ -111,6 +132,7 @@ public class FluxoPedidoAutomaticoService {
                 .pastaNfesSaida(dirNfeSaida.toString())
                 .pastaNfesEntrada(dirNfeEntrada.toString())
                 .arquivoResumonf(arquivoResumo.toString())
+                .processamentoRessarcimento(procRef)
                 .build();
         exec = execucaoRepository.save(exec);
         Long execId = exec.getId();
@@ -292,8 +314,11 @@ public class FluxoPedidoAutomaticoService {
                     .status("GERADO_FLUXO_B")
                     .xmlContent(xml)
                     .execucaoFluxoPedido(exec)
+                    .processamentoRessarcimento(procRef)
                     .build();
             arq = arquivoPedidoRepository.save(arq);
+
+            persistirNotasSeRastreio(processamentoRessarcimentoId, decl, notasMontadas);
 
             exec.setDataHoraFim(LocalDateTime.now());
             exec.setStatusExecucao(avisos.isEmpty() ? STATUS_CONCLUIDO : STATUS_CONCLUIDO_AVISOS);
@@ -332,6 +357,68 @@ public class FluxoPedidoAutomaticoService {
                 .ts(LocalDateTime.now())
                 .build();
         exec.getLogs().add(lg);
+    }
+
+    /**
+     * Garante rastreio em {@code nota_saida.processamento_ressarcimento_id}: insere notas novas ou atualiza o FK
+     * quando a chave já existe (ex.: importação manual anterior sem processamento).
+     */
+    private void persistirNotasSeRastreio(
+            Long processamentoRessarcimentoId, Declarante decl, List<NotaSaida> notasMontadas) {
+        if (processamentoRessarcimentoId == null || notasMontadas == null || notasMontadas.isEmpty()) {
+            return;
+        }
+        ProcessamentoRessarcimento procRef =
+                processamentoRessarcimentoRepository.getReferenceById(processamentoRessarcimentoId);
+        Long declId = decl.getId();
+        for (NotaSaida ns : notasMontadas) {
+            Optional<NotaSaida> existenteOpt = notaSaidaRepository.findByChaveNFe(ns.getChaveNFe());
+            if (existenteOpt.isPresent()) {
+                NotaSaida existente = existenteOpt.get();
+                if (!declId.equals(existente.getDeclarante().getId())) {
+                    log.warn(
+                            "Nota de saída chave={} pertence a outro declarante; não vincula ao processamento {}.",
+                            ns.getChaveNFe(),
+                            processamentoRessarcimentoId);
+                    continue;
+                }
+                ProcessamentoRessarcimento procAtual = existente.getProcessamentoRessarcimento();
+                Long procAtualId = procAtual == null ? null : procAtual.getId();
+                if (!processamentoRessarcimentoId.equals(procAtualId)) {
+                    existente.setProcessamentoRessarcimento(procRef);
+                    notaSaidaRepository.save(existente);
+                }
+                continue;
+            }
+            NotaSaida persisted = NotaSaida.builder()
+                    .declarante(decl)
+                    .chaveNFe(ns.getChaveNFe())
+                    .anoPeriodoReferencia(ns.getAnoPeriodoReferencia())
+                    .mesPeriodoReferencia(ns.getMesPeriodoReferencia())
+                    .processamentoRessarcimento(procRef)
+                    .itens(new ArrayList<>())
+                    .build();
+            for (ItemNotaSaida it : ns.getItens()) {
+                NotaEntrada ne = null;
+                if (it.getNotaEntrada() != null && StringUtils.hasText(it.getNotaEntrada().getChaveNFeEntrada())) {
+                    String chaveEnt = it.getNotaEntrada().getChaveNFeEntrada().trim();
+                    ne = notaEntradaRepository
+                            .findByChaveNFeEntrada(chaveEnt)
+                            .orElseGet(() -> notaEntradaRepository.save(
+                                    NotaEntrada.builder().chaveNFeEntrada(chaveEnt).build()));
+                }
+                ItemNotaSaida ni = ItemNotaSaida.builder()
+                        .notaSaida(persisted)
+                        .produtoMatriz(it.getProdutoMatriz())
+                        .codInternoProduto(it.getCodInternoProduto())
+                        .numItemNFe(it.getNumItemNFe())
+                        .notaEntrada(ne)
+                        .build();
+                ni.getChavesNfeEntradaConsumidas().addAll(it.getChavesNfeEntradaConsumidas());
+                persisted.getItens().add(ni);
+            }
+            notaSaidaRepository.save(persisted);
+        }
     }
 
     /**

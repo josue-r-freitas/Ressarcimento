@@ -97,8 +97,13 @@ public class UiPedidoController {
     }
 
     @GetMapping("/gerar-automatico")
-    public String gerarAutomaticoForm(Model model) {
+    public String gerarAutomaticoForm(
+            @RequestParam(required = false) Integer ano,
+            @RequestParam(required = false) Integer mes,
+            Model model) {
         model.addAttribute("pageTitle", "Pedidos — gerar XML automático (Fluxo B)");
+        model.addAttribute("anoPrefill", ano);
+        model.addAttribute("mesPrefill", mes);
         return "ui/pedidos/gerar-automatico";
     }
 

@@ -1,6 +1,7 @@
 package br.com.empresa.ressarcimento.pedidos.domain;
 
 import br.com.empresa.ressarcimento.declarante.domain.Declarante;
+import br.com.empresa.ressarcimento.processamento.domain.ProcessamentoRessarcimento;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -48,6 +49,10 @@ public class NotaSaida {
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "processamento_ressarcimento_id")
+    private ProcessamentoRessarcimento processamentoRessarcimento;
 
     @OneToMany(mappedBy = "notaSaida", cascade = jakarta.persistence.CascadeType.ALL, orphanRemoval = true)
     @Builder.Default

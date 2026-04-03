@@ -5,21 +5,25 @@
 <div th:replace="~{fragments/nav :: nav}"></div>
 <main class="container pb-5">
     <h1 class="h4 mb-3" th:text="${pageTitle}">Planilha automática</h1>
-    <p class="text-muted">Parâmetros opcionais (ano/mês de referência, nome do arquivo de resumo). Deixe em branco para usar os padrões do serviço.</p>
-    <p class="text-muted small">Após clicar em baixar, abra as <strong>Ferramentas de desenvolvedor</strong> (F12) → separador <strong>Rede</strong> → selecione o pedido <code>gerar-planilha-automatica</code> → em <strong>Cabeçalhos da resposta</strong> aparecem totais (<code>X-Ressarcimento-*</code>): linhas do resumo após filtro de período (se ano/mês informados), rejeitadas (validação/EFD), montadas para deduplicação, colapsadas pela dedup e produtos únicos na planilha.</p>
+    <p class="text-muted">Usa o ficheiro de resumo <code>resumonf.xlsx</code> na pasta configurada
+        (<code>RESSARCIMENTO_RESUMO_NOTAS_DIR</code>). Ano e mês são opcionais (filtro de período na geração).</p>
+    <p class="text-muted small">Após clicar em baixar, abra as <strong>Ferramentas de desenvolvedor</strong> (F12) →
+        separador <strong>Rede</strong> → pedido <code>gerar-planilha-automatica</code> → cabeçalhos
+        <code>X-Ressarcimento-*</code> com totais.</p>
     <form th:action="@{/ui/produtos/gerar-planilha-automatica}" method="post" class="card shadow-sm">
         <div class="card-body row g-3">
             <div class="col-md-2">
-                <label class="form-label" for="anoReferencia">Ano</label>
+                <label class="form-label" for="anoReferencia">Ano <span class="text-muted">(opcional)</span></label>
                 <input id="anoReferencia" class="form-control" type="number" name="anoReferencia"/>
             </div>
             <div class="col-md-2">
-                <label class="form-label" for="mesReferencia">Mês</label>
+                <label class="form-label" for="mesReferencia">Mês <span class="text-muted">(opcional)</span></label>
                 <input id="mesReferencia" class="form-control" type="number" name="mesReferencia" min="1" max="12"/>
             </div>
             <div class="col-md-6">
-                <label class="form-label" for="nomeArquivoResumo">Nome arquivo resumo (.xlsx)</label>
-                <input id="nomeArquivoResumo" class="form-control" name="nomeArquivoResumo" placeholder="ex.: resumonf.xlsx"/>
+                <label class="form-label" for="nomeArquivoResumo">Nome arquivo resumo</label>
+                <input id="nomeArquivoResumo" class="form-control" name="nomeArquivoResumo" value="resumonf.xlsx"
+                       readonly/>
             </div>
         </div>
         <div class="card-footer">

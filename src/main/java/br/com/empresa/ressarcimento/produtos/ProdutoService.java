@@ -3,10 +3,12 @@ package br.com.empresa.ressarcimento.produtos;
 import br.com.empresa.ressarcimento.declarante.DeclaranteService;
 import br.com.empresa.ressarcimento.declarante.domain.Declarante;
 import br.com.empresa.ressarcimento.pedidos.ItemNotaSaidaRepository;
+import br.com.empresa.ressarcimento.pedidos.fluxo.audit.FluxoBAuditStagingService;
 import br.com.empresa.ressarcimento.planilhas.LeitorPlanilhaProdutos;
 import br.com.empresa.ressarcimento.planilhas.dto.ProdutoPlanilhaDTO;
 import br.com.empresa.ressarcimento.produtos.api.ProdutoDTO;
 import br.com.empresa.ressarcimento.produtos.api.ArquivoProdutosDTO;
+import br.com.empresa.ressarcimento.processamento.ProcessamentoRessarcimentoRepository;
 import br.com.empresa.ressarcimento.produtos.domain.ArquivoProdutos;
 import br.com.empresa.ressarcimento.produtos.domain.ProdutoMatriz;
 import br.com.empresa.ressarcimento.shared.api.ErroPlanilhaDTO;
@@ -17,7 +19,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -37,17 +41,26 @@ public class ProdutoService {
     private final LeitorPlanilhaProdutos leitorPlanilha;
     private final DeclaranteService declaranteService;
     private final GeradorXmlProdutos geradorXml;
+    private final ProcessamentoRessarcimentoRepository processamentoRessarcimentoRepository;
+    private final FluxoBAuditStagingService fluxoBAuditStagingService;
 
     @Transactional
     public ResultadoImportacaoDTO importar(MultipartFile arquivo) throws IOException {
-        String nome = arquivo.getOriginalFilename() != null ? arquivo.getOriginalFilename().toLowerCase() : "";
-        List<ProdutoPlanilhaDTO> linhas;
+        String nome = arquivo.getOriginalFilename() != null ? arquivo.getOriginalFilename() : "";
         try (InputStream is = arquivo.getInputStream()) {
-            if (nome.endsWith(".csv")) {
-                linhas = leitorPlanilha.lerCsv(is);
-            } else {
-                linhas = leitorPlanilha.lerExcel(is);
-            }
+            return importar(is, nome);
+        }
+    }
+
+    /** Importação a partir de fluxo programático (ex.: pipeline Processar Ressarcimento). */
+    @Transactional
+    public ResultadoImportacaoDTO importar(InputStream inputStream, String nomeArquivoOriginal) throws IOException {
+        String nome = nomeArquivoOriginal != null ? nomeArquivoOriginal.toLowerCase() : "";
+        List<ProdutoPlanilhaDTO> linhas;
+        if (nome.endsWith(".csv")) {
+            linhas = leitorPlanilha.lerCsv(inputStream);
+        } else {
+            linhas = leitorPlanilha.lerExcel(inputStream);
         }
         List<ErroPlanilhaDTO> erros = new ArrayList<>();
         List<ProdutoMatriz> aPersistir = new ArrayList<>();
@@ -86,6 +99,8 @@ public class ProdutoService {
                     .erros(erros)
                     .build();
         }
+        // Staging do Fluxo B referencia produto_matriz; sem limpar, deleteAllInBatch falha (FK).
+        fluxoBAuditStagingService.limparStaging();
         itemNotaSaidaRepository.desvincularProdutosMatriz();
         produtoRepository.deleteAllInBatch();
         for (ProdutoMatriz p : aPersistir) {
@@ -128,17 +143,75 @@ public class ProdutoService {
 
     @Transactional
     public byte[] gerarXml() throws JAXBException {
+        return gerarXml(null);
+    }
+
+    @Transactional
+    public byte[] gerarXml(Long processamentoRessarcimentoId) throws JAXBException {
+        ArquivoProdutos salvo = persistirGeracaoXml(processamentoRessarcimentoId);
+        return salvo.getXmlContent().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    /** Persiste o XML de produtos e devolve o id do registo em {@code arquivo_produtos} (ex.: pós-pipeline). */
+    @Transactional
+    public Long gerarXmlRetornandoIdArquivo(Long processamentoRessarcimentoId) throws JAXBException {
+        return persistirGeracaoXml(processamentoRessarcimentoId).getId();
+    }
+
+    private ArquivoProdutos persistirGeracaoXml(Long processamentoRessarcimentoId) throws JAXBException {
         Declarante declarante = declaranteService.getEntidadeOuLanca();
-        List<ProdutoMatriz> produtos = produtoRepository.findAllByOrderByCodInternoProduto();
+        List<String> codigosEmNotas;
+        if (processamentoRessarcimentoId != null) {
+            codigosEmNotas = itemNotaSaidaRepository.findDistinctCodInternoProdutoByNotaSaidaDeclaranteIdAndProcessamentoId(
+                    declarante.getId(), processamentoRessarcimentoId);
+        } else {
+            codigosEmNotas =
+                    itemNotaSaidaRepository.findDistinctCodInternoProdutoByNotaSaidaDeclaranteId(declarante.getId());
+        }
+        if (codigosEmNotas.isEmpty()) {
+            if (processamentoRessarcimentoId != null) {
+                throw new IllegalArgumentException(
+                        "Não há códigos de produto em itens de notas de saída deste processamento "
+                                + "(nota_saida.processamento_ressarcimento_id = "
+                                + processamentoRessarcimentoId
+                                + "). Verifique se as NF-e de saída foram gravadas para este processamento.");
+            }
+            throw new IllegalArgumentException(
+                    "Não há códigos de produto em itens de notas de saída (item_nota_saida) para este declarante. "
+                            + "Importe ou gere as operações de pedidos (nota_saida / item_nota_saida) antes de gerar o XML de produtos.");
+        }
+        List<ProdutoMatriz> candidatos =
+                produtoRepository.findByCodInternoProdutoInOrderByCodInternoProduto(codigosEmNotas);
+        Map<String, ProdutoMatriz> umPorCodigo = new LinkedHashMap<>();
+        for (ProdutoMatriz p : candidatos) {
+            umPorCodigo.putIfAbsent(p.getCodInternoProduto(), p);
+        }
+        List<String> semMatriz = codigosEmNotas.stream()
+                .filter(c -> !umPorCodigo.containsKey(c))
+                .sorted()
+                .distinct()
+                .toList();
+        if (!semMatriz.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Existem códigos em item_nota_saida sem produto correspondente na matriz: "
+                            + String.join(", ", semMatriz));
+        }
+        List<ProdutoMatriz> produtos = codigosEmNotas.stream()
+                .sorted()
+                .distinct()
+                .map(umPorCodigo::get)
+                .toList();
         String xml = geradorXml.gerar(declarante, produtos);
-        ArquivoProdutos arquivo = ArquivoProdutos.builder()
+        ArquivoProdutos.ArquivoProdutosBuilder b = ArquivoProdutos.builder()
                 .declarante(declarante)
                 .dataGeracao(LocalDateTime.now())
                 .status("GERADO")
-                .xmlContent(xml)
-                .build();
-        arquivoRepository.save(arquivo);
-        return xml.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                .xmlContent(xml);
+        if (processamentoRessarcimentoId != null) {
+            b.processamentoRessarcimento(
+                    processamentoRessarcimentoRepository.getReferenceById(processamentoRessarcimentoId));
+        }
+        return arquivoRepository.save(b.build());
     }
 
     @Transactional(readOnly = true)

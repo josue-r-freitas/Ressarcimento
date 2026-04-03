@@ -1,6 +1,7 @@
 package br.com.empresa.ressarcimento.produtos;
 
 import br.com.empresa.ressarcimento.produtos.domain.ProdutoMatriz;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -13,6 +14,8 @@ public interface ProdutoMatrizRepository extends JpaRepository<ProdutoMatriz, Lo
             String codigo, String descricao, Pageable pageable);
 
     List<ProdutoMatriz> findAllByOrderByCodInternoProduto();
+
+    List<ProdutoMatriz> findByCodInternoProdutoInOrderByCodInternoProduto(Collection<String> codInternosProduto);
 
     boolean existsByCodInternoProdutoAndCnpjFornecedorAndCodProdFornecedor(
             String codInterno, String cnpjFornecedor, String codProdFornecedor);
