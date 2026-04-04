@@ -8,6 +8,9 @@ import br.com.empresa.ressarcimento.planilhas.dto.ResumoNfLinhaDTO;
 import br.com.empresa.ressarcimento.processamento.ProcessamentoRessarcimentoRepository;
 import br.com.empresa.ressarcimento.processamento.domain.ProcessamentoRessarcimento;
 import br.com.empresa.ressarcimento.produtos.automatizado.LeitorNfeUcom;
+import br.com.empresa.ressarcimento.produtos.automatizado.efd.C170Linha;
+import br.com.empresa.ressarcimento.produtos.automatizado.efd.EfdIndice;
+import br.com.empresa.ressarcimento.produtos.automatizado.efd.NotaEfd;
 import java.math.BigDecimal;
 import java.nio.file.Path;
 import java.time.LocalDate;
@@ -103,7 +106,7 @@ class FluxoBAuditStagingServiceTest {
                 .build());
 
         stagingService.persistirEntradasDoResumo(
-                linhas, Path.of("nfe-inexistente"), new LeitorNfeUcom(), processamento);
+                linhas, Path.of("nfe-inexistente"), new LeitorNfeUcom(), processamento, null);
 
         assertThat(nfeEntradaRepository.findAll()).hasSize(1);
         FluxoBAuditNfeEntrada h = nfeEntradaRepository.findAll().get(0);
@@ -113,5 +116,41 @@ class FluxoBAuditStagingServiceTest {
         assertThat(itemEntradaRepository.findAll()).hasSize(1);
         assertThat(itemEntradaRepository.findAll().get(0).getCfop()).isEqualTo("1102");
         assertThat(itemEntradaRepository.findAll().get(0).getQtdUnitCompra()).isEqualByComparingTo("10.5");
+    }
+
+    @Test
+    void persistirEntradasDoResumo_preenchePelaEfd_quandoPlanilhaSemValores() throws Exception {
+        String chave = "32345678901234567890123456789012345678901234";
+        EfdIndice indice = new EfdIndice();
+        NotaEfd notaEfd = new NotaEfd();
+        notaEfd.putItem(new C170Linha(
+                1,
+                "COD1",
+                "UN",
+                new BigDecimal("4"),
+                new BigDecimal("12.34"),
+                "1556",
+                new BigDecimal("9.99")));
+        indice.mergeNotaEntrada(chave, notaEfd);
+
+        List<ResumoNfLinhaDTO> linhas = List.of(ResumoNfLinhaDTO.builder()
+                .numeroLinhaPlanilha(2)
+                .chave(chave)
+                .seqItem(1)
+                .codgItem("P001")
+                .cnpjFornecedor("12345678000199")
+                .dataApresentacao(LocalDate.of(2024, 3, 10))
+                .tributo("1380")
+                .nrNota("999")
+                .build());
+
+        stagingService.persistirEntradasDoResumo(
+                linhas, Path.of("nfe-inexistente"), new LeitorNfeUcom(), processamento, indice);
+
+        var item = itemEntradaRepository.findAll().get(0);
+        assertThat(item.getQtdUnitCompra()).isEqualByComparingTo("4");
+        assertThat(item.getValorUnitario()).isEqualByComparingTo("12.34");
+        assertThat(item.getCfop()).isEqualTo("1556");
+        assertThat(item.getValorImposto()).isEqualByComparingTo("9.99");
     }
 }

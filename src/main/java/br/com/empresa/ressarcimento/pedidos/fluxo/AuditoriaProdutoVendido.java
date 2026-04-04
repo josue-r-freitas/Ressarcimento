@@ -35,10 +35,6 @@ public class AuditoriaProdutoVendido {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "execucao_id", nullable = false)
-    private ExecucaoFluxoPedido execucao;
-
-    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "processamento_ressarcimento_id", nullable = false)
     private ProcessamentoRessarcimento processamentoRessarcimento;
 

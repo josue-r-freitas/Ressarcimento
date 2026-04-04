@@ -12,7 +12,7 @@ import lombok.NoArgsConstructor;
 @Builder
 public class GerarPedidoAutomaticoResponse {
 
-    private Long idExecucao;
+    private Long processamentoRessarcimentoId;
     private Long arquivoPedidoId;
     private String status;
     private List<String> avisos;

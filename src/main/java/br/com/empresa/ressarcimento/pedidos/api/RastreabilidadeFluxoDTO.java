@@ -13,7 +13,7 @@ import lombok.NoArgsConstructor;
 @Builder
 public class RastreabilidadeFluxoDTO {
 
-    private ExecucaoFluxoPedidoResumoDTO execucao;
+    private ExecucaoFluxoPedidoResumoDTO processamento;
     private List<AuditoriaProdutoVendidoDTO> produtosVendidos;
     private List<Map<String, String>> logs;
 }

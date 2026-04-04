@@ -20,12 +20,12 @@ public class ResumoNfLinhaDTO {
     private String tributo;
     /** Coluna NR. NOTA (Fluxo B / staging entrada). */
     private String nrNota;
-    /** Quantidade unitária comprada — colunas mapeadas em {@code LeitorResumoNf}. */
+    /** resumonf: coluna {@code QTDE. UNITÁRIA} → {@code fluxo_b_audit_item_nfe_entrada.qtd_unit_compra}. */
     private BigDecimal qtdUnitCompra;
-    /** Valor unitário. */
+    /** resumonf: {@code VALOR UNITÁRIO} → {@code valor_unitario}. */
     private BigDecimal valorUnitario;
-    /** CFOP (planilha). */
+    /** resumonf: {@code CODG. CFOP} → {@code cfop}. */
     private String cfop;
-    /** Valor do imposto. */
+    /** resumonf: {@code VALOR IMPOSTO} → {@code valor_imposto}. */
     private BigDecimal valorImposto;
 }

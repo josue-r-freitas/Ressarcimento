@@ -1,5 +1,6 @@
 package br.com.empresa.ressarcimento.pedidos.fluxo;
 
+import br.com.empresa.ressarcimento.processamento.domain.ProcessamentoRessarcimento;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -30,8 +31,8 @@ public class LogExecucaoFluxo {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "execucao_id", nullable = false)
-    private ExecucaoFluxoPedido execucao;
+    @JoinColumn(name = "processamento_ressarcimento_id", nullable = false)
+    private ProcessamentoRessarcimento processamentoRessarcimento;
 
     @Column(name = "nivel", nullable = false, length = 10)
     private String nivel;

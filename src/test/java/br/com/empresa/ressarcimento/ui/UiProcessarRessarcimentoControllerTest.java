@@ -58,7 +58,7 @@ class UiProcessarRessarcimentoControllerTest {
                 .processamentoRessarcimentoId(1L)
                 .arquivoProdutosId(88L)
                 .respostaPedidos(GerarPedidoAutomaticoResponse.builder()
-                        .idExecucao(2L)
+                        .processamentoRessarcimentoId(1L)
                         .arquivoPedidoId(9L)
                         .status("CONCLUIDO")
                         .avisos(List.of())

@@ -49,6 +49,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -88,7 +89,6 @@ public class FluxoPedidoAutomaticoService {
     private final ProdutoMatrizRepository produtoMatrizRepository;
     private final DeclaranteService declaranteService;
     private final GeradorXmlPedidos geradorXmlPedidos;
-    private final ExecucaoFluxoPedidoRepository execucaoRepository;
     private final ArquivoPedidoRepository arquivoPedidoRepository;
     private final FluxoBAuditStagingService fluxoBAuditStagingService;
     private final ProcessamentoRessarcimentoRepository processamentoRessarcimentoRepository;
@@ -126,23 +126,14 @@ public class FluxoPedidoAutomaticoService {
             procRef = processamentoRessarcimentoLifecycle.iniciarEmAndamento(ano, mes);
         }
         Long pidRastreio = procRef.getId();
-
-        ExecucaoFluxoPedido exec = ExecucaoFluxoPedido.builder()
-                .declarante(decl)
-                .anoReferencia(anoStr)
-                .mesReferencia(mesStr)
-                .dataHoraInicio(LocalDateTime.now())
-                .statusExecucao(STATUS_EM_ANDAMENTO)
-                .arquivoEfdUtilizado(dirEfd.toString())
-                .pastaNfesSaida(dirNfeSaida.toString())
-                .pastaNfesEntrada(dirNfeEntrada.toString())
-                .arquivoResumonf(arquivoResumo.toString())
-                .processamentoRessarcimento(procRef)
-                .build();
-        exec = execucaoRepository.save(exec);
-        Long execId = exec.getId();
-        MDC.put("idExecucao", String.valueOf(execId));
-        log.info("Início Fluxo B idExecucao={} período={}-{}", execId, anoStr, mesStr);
+        procRef.setStatusExecucao(STATUS_EM_ANDAMENTO);
+        procRef.setArquivoEfdUtilizado(dirEfd.toString());
+        procRef.setPastaNfesSaida(dirNfeSaida.toString());
+        procRef.setPastaNfesEntrada(dirNfeEntrada.toString());
+        procRef.setArquivoResumonf(arquivoResumo.toString());
+        procRef = processamentoRessarcimentoRepository.save(procRef);
+        MDC.put("idProcessamento", String.valueOf(pidRastreio));
+        log.info("Início Fluxo B idProcessamento={} período={}-{}", pidRastreio, anoStr, mesStr);
 
         List<String> avisos = new ArrayList<>();
 
@@ -154,7 +145,7 @@ public class FluxoPedidoAutomaticoService {
                                     Comparator.nullsLast(Comparator.naturalOrder()))
                             .thenComparing(k -> k));
             if (chavesSaida.isEmpty()) {
-                addLog(exec, "WARN", "LEITURA_EFD", "Nenhuma NF-e de saída modelo 55 no período na EFD.", null);
+                addLog(procRef, "WARN", "LEITURA_EFD", "Nenhuma NF-e de saída modelo 55 no período na EFD.", null);
                 avisos.add("Nenhuma chave de saída no período na EFD.");
             }
 
@@ -171,13 +162,13 @@ public class FluxoPedidoAutomaticoService {
 
             try {
                 fluxoBAuditStagingService.persistirEntradasDoResumo(
-                        linhasResumo, dirNfeEntrada, leitorNfeUcom, procRef);
+                        linhasResumo, dirNfeEntrada, leitorNfeUcom, procRef, indice);
             } catch (Exception e) {
                 throw new IOException("Falha ao gravar staging de auditoria (resumo NF entrada): " + e.getMessage(), e);
             }
 
             Map<String, ArrayDeque<EntradaFifoSlot>> estoqueFifo =
-                    construirEstoqueFifo(linhasResumo, indice, exec, avisos);
+                    construirEstoqueFifo(linhasResumo, indice, procRef, avisos);
 
             List<NotaSaida> notasMontadas = new ArrayList<>();
 
@@ -191,7 +182,7 @@ public class FluxoPedidoAutomaticoService {
                             .build());
                     String msg = "XML de NF-e de saída não encontrado para chave " + chaveSaida;
                     avisos.add(msg);
-                    addLog(exec, "WARN", "LEITURA_XML_SAIDA", msg, chaveSaida);
+                    addLog(procRef, "WARN", "LEITURA_XML_SAIDA", msg, chaveSaida);
                     continue;
                 }
 
@@ -214,7 +205,7 @@ public class FluxoPedidoAutomaticoService {
                 } catch (Exception e) {
                     fluxoBAuditStagingService.salvarNfeSaida(auditSaida);
                     avisos.add("Falha ao ler XML saída " + chaveSaida + ": " + e.getMessage());
-                    addLog(exec, "ERROR", "LEITURA_XML_SAIDA", e.getMessage(), chaveSaida);
+                    addLog(procRef, "ERROR", "LEITURA_XML_SAIDA", e.getMessage(), chaveSaida);
                     continue;
                 }
                 if (itensXml.isEmpty()) {
@@ -261,7 +252,7 @@ public class FluxoPedidoAutomaticoService {
                     if (pmOpt.isEmpty()) {
                         String msg = "Sem mapeamento de produto para cProd=" + ix.cProd() + " na saída " + chaveSaida;
                         avisos.add(msg);
-                        addLog(exec, "WARN", "MAPEAMENTO_PRODUTO", msg, null);
+                        addLog(procRef, "WARN", "MAPEAMENTO_PRODUTO", msg, null);
                         continue;
                     }
                     ProdutoMatriz pm = pmOpt.get();
@@ -281,7 +272,6 @@ public class FluxoPedidoAutomaticoService {
                     ns.getItens().add(item);
 
                     AuditoriaProdutoVendido aud = AuditoriaProdutoVendido.builder()
-                            .execucao(exec)
                             .processamentoRessarcimento(procRef)
                             .codInternoProduto(codInt)
                             .chaveNfeSaida(chaveSaida)
@@ -296,7 +286,7 @@ public class FluxoPedidoAutomaticoService {
                         lin.setAuditoriaProduto(aud);
                         aud.getEntradasConsumidas().add(lin);
                     }
-                    exec.getAuditoriasProduto().add(aud);
+                    procRef.getAuditoriasProdutoFluxoB().add(aud);
                 }
 
                 if (!ns.getItens().isEmpty()) {
@@ -305,10 +295,10 @@ public class FluxoPedidoAutomaticoService {
             }
 
             if (notasMontadas.isEmpty()) {
-                exec.setStatusExecucao(STATUS_ERRO);
-                exec.setDataHoraFim(LocalDateTime.now());
-                addLog(exec, "ERROR", "GERACAO_XML", "Nenhuma operação com itens CFOP 6102/6108 elegível.", null);
-                execucaoRepository.save(exec);
+                procRef.setStatusExecucao(STATUS_ERRO);
+                procRef.setDataHoraFim(LocalDateTime.now());
+                addLog(procRef, "ERROR", "GERACAO_XML", "Nenhuma operação com itens CFOP 6102/6108 elegível.", null);
+                processamentoRessarcimentoRepository.save(procRef);
                 throw new IllegalArgumentException(
                         "Fluxo B: nenhuma NF-e de saída com itens elegíveis (CFOP 6102/6108) e produto mapeado.");
             }
@@ -322,55 +312,56 @@ public class FluxoPedidoAutomaticoService {
                     .dataGeracao(LocalDateTime.now())
                     .status("GERADO_FLUXO_B")
                     .xmlContent(xml)
-                    .execucaoFluxoPedido(exec)
                     .processamentoRessarcimento(procRef)
                     .build();
             arq = arquivoPedidoRepository.save(arq);
 
             persistirNotasSeRastreio(pidRastreio, decl, notasMontadas);
 
-            exec.setDataHoraFim(LocalDateTime.now());
-            exec.setStatusExecucao(avisos.isEmpty() ? STATUS_CONCLUIDO : STATUS_CONCLUIDO_AVISOS);
-            execucaoRepository.save(exec);
+            procRef.setDataHoraFim(LocalDateTime.now());
+            procRef.setStatusExecucao(avisos.isEmpty() ? STATUS_CONCLUIDO : STATUS_CONCLUIDO_AVISOS);
+            processamentoRessarcimentoRepository.save(procRef);
 
-            log.info("Fim Fluxo B idExecucao={} status={}", execId, exec.getStatusExecucao());
+            log.info("Fim Fluxo B idProcessamento={} status={}", pidRastreio, procRef.getStatusExecucao());
             return GerarPedidoAutomaticoResponse.builder()
-                    .idExecucao(execId)
+                    .processamentoRessarcimentoId(pidRastreio)
                     .arquivoPedidoId(arq.getId())
-                    .status(exec.getStatusExecucao())
+                    .status(procRef.getStatusExecucao())
                     .avisos(avisos)
                     .build();
         } catch (Exception e) {
-            exec.setDataHoraFim(LocalDateTime.now());
-            exec.setStatusExecucao(STATUS_ERRO);
+            procRef.setDataHoraFim(LocalDateTime.now());
+            procRef.setStatusExecucao(STATUS_ERRO);
             addLog(
-                    exec,
+                    procRef,
                     "ERROR",
                     "GERAL",
                     e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName(),
                     null);
-            execucaoRepository.save(exec);
+            processamentoRessarcimentoRepository.save(procRef);
             throw e;
         } finally {
-            MDC.remove("idExecucao");
+            MDC.remove("idProcessamento");
         }
     }
 
-    private void addLog(ExecucaoFluxoPedido exec, String nivel, String etapa, String mensagem, String detalhes) {
+    private void addLog(ProcessamentoRessarcimento proc, String nivel, String etapa, String mensagem, String detalhes) {
         LogExecucaoFluxo lg = LogExecucaoFluxo.builder()
-                .execucao(exec)
+                .processamentoRessarcimento(proc)
                 .nivel(nivel)
                 .etapa(etapa)
                 .mensagem(mensagem != null && mensagem.length() > 1000 ? mensagem.substring(0, 997) + "..." : mensagem)
                 .detalhes(detalhes)
                 .ts(LocalDateTime.now())
                 .build();
-        exec.getLogs().add(lg);
+        proc.getLogsFluxoPedido().add(lg);
     }
 
     /**
      * Garante rastreio em {@code nota_saida.processamento_ressarcimento_id}: insere notas novas ou atualiza o FK
      * quando a chave já existe (ex.: importação manual anterior sem processamento).
+     * Quando a saída já existe, também alinha {@code nota_entrada.processamento_ressarcimento_id} às chaves dos itens
+     * montados neste Fluxo B (evita saída no processamento atual e entradas presas ao processamento anterior).
      */
     private void persistirNotasSeRastreio(
             Long processamentoRessarcimentoId, Declarante decl, List<NotaSaida> notasMontadas) {
@@ -397,6 +388,8 @@ public class FluxoPedidoAutomaticoService {
                     existente.setProcessamentoRessarcimento(procRef);
                     notaSaidaRepository.save(existente);
                 }
+                alinharProcessamentoEntradasReferenciadasPelosItens(
+                        procRef, processamentoRessarcimentoId, ns.getItens());
                 continue;
             }
             NotaSaida persisted = NotaSaida.builder()
@@ -410,22 +403,8 @@ public class FluxoPedidoAutomaticoService {
             for (ItemNotaSaida it : ns.getItens()) {
                 NotaEntrada ne = null;
                 if (it.getNotaEntrada() != null && StringUtils.hasText(it.getNotaEntrada().getChaveNFeEntrada())) {
-                    String chaveEnt = it.getNotaEntrada().getChaveNFeEntrada().trim();
-                    Optional<NotaEntrada> neOpt = notaEntradaRepository.findByChaveNFeEntrada(chaveEnt);
-                    if (neOpt.isPresent()) {
-                        ne = neOpt.get();
-                        ProcessamentoRessarcimento procNe = ne.getProcessamentoRessarcimento();
-                        Long procNeId = procNe == null ? null : procNe.getId();
-                        if (!processamentoRessarcimentoId.equals(procNeId)) {
-                            ne.setProcessamentoRessarcimento(procRef);
-                            ne = notaEntradaRepository.save(ne);
-                        }
-                    } else {
-                        ne = notaEntradaRepository.save(NotaEntrada.builder()
-                                .chaveNFeEntrada(chaveEnt)
-                                .processamentoRessarcimento(procRef)
-                                .build());
-                    }
+                    ne = obterOuCriarNotaEntradaComProcessamento(
+                            it.getNotaEntrada().getChaveNFeEntrada(), procRef, processamentoRessarcimentoId);
                 }
                 ItemNotaSaida ni = ItemNotaSaida.builder()
                         .notaSaida(persisted)
@@ -437,7 +416,60 @@ public class FluxoPedidoAutomaticoService {
                 ni.getChavesNfeEntradaConsumidas().addAll(it.getChavesNfeEntradaConsumidas());
                 persisted.getItens().add(ni);
             }
+            alinharProcessamentoEntradasReferenciadasPelosItens(
+                    procRef, processamentoRessarcimentoId, ns.getItens());
             notaSaidaRepository.save(persisted);
+        }
+    }
+
+    private NotaEntrada obterOuCriarNotaEntradaComProcessamento(
+            String chaveNFe44,
+            ProcessamentoRessarcimento procRef,
+            long processamentoRessarcimentoId) {
+        String chaveEnt = chaveNFe44.trim();
+        Optional<NotaEntrada> neOpt = notaEntradaRepository.findByChaveNFeEntrada(chaveEnt);
+        if (neOpt.isPresent()) {
+            NotaEntrada ne = neOpt.get();
+            Long procNeId =
+                    ne.getProcessamentoRessarcimento() == null ? null : ne.getProcessamentoRessarcimento().getId();
+            if (!Objects.equals(processamentoRessarcimentoId, procNeId)) {
+                ne.setProcessamentoRessarcimento(procRef);
+                return notaEntradaRepository.save(ne);
+            }
+            return ne;
+        }
+        return notaEntradaRepository.save(NotaEntrada.builder()
+                .chaveNFeEntrada(chaveEnt)
+                .processamentoRessarcimento(procRef)
+                .build());
+    }
+
+    /**
+     * Atualiza ou cria {@link NotaEntrada} para cada chave referenciada nos itens em memória (principal + FIFO).
+     */
+    private void alinharProcessamentoEntradasReferenciadasPelosItens(
+            ProcessamentoRessarcimento procRef,
+            long processamentoRessarcimentoId,
+            List<ItemNotaSaida> itens) {
+        if (itens == null || itens.isEmpty()) {
+            return;
+        }
+        for (ItemNotaSaida it : itens) {
+            if (it.getNotaEntrada() != null && StringUtils.hasText(it.getNotaEntrada().getChaveNFeEntrada())) {
+                obterOuCriarNotaEntradaComProcessamento(
+                        it.getNotaEntrada().getChaveNFeEntrada(), procRef, processamentoRessarcimentoId);
+            }
+            if (it.getChavesNfeEntradaConsumidas() != null) {
+                for (String chave : it.getChavesNfeEntradaConsumidas()) {
+                    if (!StringUtils.hasText(chave)) {
+                        continue;
+                    }
+                    String t = chave.trim();
+                    if (t.length() == 44) {
+                        obterOuCriarNotaEntradaComProcessamento(t, procRef, processamentoRessarcimentoId);
+                    }
+                }
+            }
         }
     }
 
@@ -500,7 +532,7 @@ public class FluxoPedidoAutomaticoService {
     private Map<String, ArrayDeque<EntradaFifoSlot>> construirEstoqueFifo(
             List<ResumoNfLinhaDTO> linhasResumo,
             EfdIndice indice,
-            ExecucaoFluxoPedido exec,
+            ProcessamentoRessarcimento proc,
             List<String> avisos) {
         List<ResumoNfLinhaDTO> ordenadas = linhasResumo.stream()
                 .sorted(Comparator.comparing(
@@ -529,7 +561,7 @@ public class FluxoPedidoAutomaticoService {
             if (pmOpt.isEmpty()) {
                 String msg = "FIFO: sem produto na matriz para COD_ITEM=" + codInt + " (chave " + linha.getChave() + ")";
                 avisos.add(msg);
-                addLog(exec, "WARN", "ESTOQUE_FIFO", msg, linha.getChave());
+                addLog(proc, "WARN", "ESTOQUE_FIFO", msg, linha.getChave());
                 continue;
             }
             ProdutoMatriz pm = pmOpt.get();
@@ -663,8 +695,8 @@ public class FluxoPedidoAutomaticoService {
     @Transactional(readOnly = true)
     public Page<ExecucaoFluxoPedidoResumoDTO> listarExecucoes(Pageable pageable) {
         Declarante decl = declaranteService.getEntidadeOuLanca();
-        return execucaoRepository
-                .findByDeclaranteIdOrderByDataHoraInicioDesc(decl.getId(), pageable)
+        return processamentoRessarcimentoRepository
+                .findByDeclaranteIdAndArquivoEfdUtilizadoIsNotNullOrderByDataHoraInicioDesc(decl.getId(), pageable)
                 .map(e -> ExecucaoFluxoPedidoResumoDTO.builder()
                         .id(e.getId())
                         .anoReferencia(e.getAnoReferencia())
@@ -676,25 +708,27 @@ public class FluxoPedidoAutomaticoService {
     }
 
     @Transactional(readOnly = true)
-    public RastreabilidadeFluxoDTO rastreabilidade(Long idExecucao) {
-        ExecucaoFluxoPedido exec = execucaoRepository
-                .findDetailedById(idExecucao)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Execução não encontrada: " + idExecucao));
+    public RastreabilidadeFluxoDTO rastreabilidade(Long idProcessamento) {
+        ProcessamentoRessarcimento proc = processamentoRessarcimentoRepository
+                .findDetailedFluxoBById(idProcessamento)
+                .orElseThrow(() -> new RecursoNaoEncontradoException(
+                        "Processamento de Fluxo B não encontrado: " + idProcessamento));
         Declarante decl = declaranteService.getEntidadeOuLanca();
-        if (!exec.getDeclarante().getId().equals(decl.getId())) {
-            throw new RecursoNaoEncontradoException("Execução não encontrada: " + idExecucao);
+        if (!proc.getDeclarante().getId().equals(decl.getId())) {
+            throw new RecursoNaoEncontradoException(
+                    "Processamento de Fluxo B não encontrado: " + idProcessamento);
         }
 
         ExecucaoFluxoPedidoResumoDTO resumo = ExecucaoFluxoPedidoResumoDTO.builder()
-                .id(exec.getId())
-                .anoReferencia(exec.getAnoReferencia())
-                .mesReferencia(exec.getMesReferencia())
-                .dataHoraInicio(exec.getDataHoraInicio())
-                .dataHoraFim(exec.getDataHoraFim())
-                .statusExecucao(exec.getStatusExecucao())
+                .id(proc.getId())
+                .anoReferencia(proc.getAnoReferencia())
+                .mesReferencia(proc.getMesReferencia())
+                .dataHoraInicio(proc.getDataHoraInicio())
+                .dataHoraFim(proc.getDataHoraFim())
+                .statusExecucao(proc.getStatusExecucao())
                 .build();
 
-        List<AuditoriaProdutoVendidoDTO> prods = exec.getAuditoriasProduto().stream()
+        List<AuditoriaProdutoVendidoDTO> prods = proc.getAuditoriasProdutoFluxoB().stream()
                 .map(a -> {
                     List<AuditoriaEntradaConsumidaDTO> ent = a.getEntradasConsumidas().stream()
                             .map(e -> AuditoriaEntradaConsumidaDTO.builder()
@@ -728,7 +762,7 @@ public class FluxoPedidoAutomaticoService {
                 })
                 .collect(Collectors.toList());
 
-        List<Map<String, String>> logs = exec.getLogs().stream()
+        List<Map<String, String>> logs = proc.getLogsFluxoPedido().stream()
                 .sorted(Comparator.comparing(LogExecucaoFluxo::getTs))
                 .map(l -> Map.of(
                         "nivel", l.getNivel(),
@@ -738,7 +772,7 @@ public class FluxoPedidoAutomaticoService {
                 .collect(Collectors.toList());
 
         return RastreabilidadeFluxoDTO.builder()
-                .execucao(resumo)
+                .processamento(resumo)
                 .produtosVendidos(prods)
                 .logs(logs)
                 .build();

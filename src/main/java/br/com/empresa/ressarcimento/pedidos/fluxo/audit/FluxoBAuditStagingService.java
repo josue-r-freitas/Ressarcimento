@@ -4,6 +4,9 @@ import br.com.empresa.ressarcimento.planilhas.dto.ResumoNfLinhaDTO;
 import br.com.empresa.ressarcimento.processamento.domain.ProcessamentoRessarcimento;
 import br.com.empresa.ressarcimento.produtos.automatizado.LeitorNfeUcom;
 import br.com.empresa.ressarcimento.produtos.automatizado.NfeIdeCampos;
+import br.com.empresa.ressarcimento.produtos.automatizado.efd.C170Linha;
+import br.com.empresa.ressarcimento.produtos.automatizado.efd.EfdIndice;
+import java.math.BigDecimal;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Objects;
@@ -47,13 +50,16 @@ public class FluxoBAuditStagingService {
 
     /**
      * Persiste resumo NF (II): uma nota por chave 44 distinta; uma linha de item por linha da planilha filtrada.
+     * Campos numéricos/CFOP faltantes na planilha são preenchidos a partir do C170 da EFD (mesma chave e
+     * {@code SEQ. ITEM} = NUM_ITEM), quando {@code indiceEfd} for informado.
      */
     @Transactional
     public void persistirEntradasDoResumo(
             List<ResumoNfLinhaDTO> linhasFiltradas,
             Path dirNfeEntrada,
             LeitorNfeUcom leitor,
-            ProcessamentoRessarcimento processamentoRessarcimento)
+            ProcessamentoRessarcimento processamentoRessarcimento,
+            EfdIndice indiceEfd)
             throws Exception {
         Objects.requireNonNull(processamentoRessarcimento, "processamentoRessarcimento");
         Map<String, List<ResumoNfLinhaDTO>> porChave = linhasFiltradas.stream()
@@ -85,21 +91,53 @@ public class FluxoBAuditStagingService {
 
             hdr = nfeEntradaRepository.save(hdr);
             for (ResumoNfLinhaDTO lin : e.getValue()) {
+                CamposItemEnriquecidos campos = resolverCamposItemEntrada(lin, indiceEfd);
                 FluxoBAuditItemNfeEntrada item = FluxoBAuditItemNfeEntrada.builder()
                         .auditNfeEntrada(hdr)
                         .seqItem(lin.getSeqItem())
                         .codgItem(lin.getCodgItem())
                         .tributo(lin.getTributo())
-                        .qtdUnitCompra(lin.getQtdUnitCompra())
-                        .valorUnitario(lin.getValorUnitario())
-                        .cfop(normalizarCfop4(lin.getCfop()))
-                        .valorImposto(lin.getValorImposto())
+                        .qtdUnitCompra(campos.qtdUnitCompra())
+                        .valorUnitario(campos.valorUnitario())
+                        .cfop(campos.cfop())
+                        .valorImposto(campos.valorImposto())
                         .cnpjFornecedor(normalizarCnpj14(lin.getCnpjFornecedor()))
                         .numeroLinhaPlanilha(lin.getNumeroLinhaPlanilha())
                         .build();
                 itemEntradaRepository.save(item);
             }
         }
+    }
+
+    private record CamposItemEnriquecidos(
+            BigDecimal qtdUnitCompra, BigDecimal valorUnitario, String cfop, BigDecimal valorImposto) {}
+
+    private static CamposItemEnriquecidos resolverCamposItemEntrada(ResumoNfLinhaDTO lin, EfdIndice indiceEfd) {
+        BigDecimal qtd = lin.getQtdUnitCompra();
+        BigDecimal vlUnit = lin.getValorUnitario();
+        String cfop = normalizarCfop4(lin.getCfop());
+        BigDecimal vlImp = lin.getValorImposto();
+
+        if (indiceEfd != null && lin.getChave() != null && lin.getChave().length() == 44) {
+            Optional<C170Linha> c170Opt =
+                    indiceEfd.notaEntradaPorChave(lin.getChave()).flatMap(n -> n.findItem(lin.getSeqItem()));
+            if (c170Opt.isPresent()) {
+                C170Linha c = c170Opt.get();
+                if (qtd == null && c.qtd() != null) {
+                    qtd = c.qtd();
+                }
+                if (vlUnit == null && c.vlUnit() != null) {
+                    vlUnit = c.vlUnit();
+                }
+                if (cfop == null && c.cfop() != null) {
+                    cfop = normalizarCfop4(c.cfop());
+                }
+                if (vlImp == null && c.vlIcms() != null) {
+                    vlImp = c.vlIcms();
+                }
+            }
+        }
+        return new CamposItemEnriquecidos(qtd, vlUnit, cfop, vlImp);
     }
 
     private static String trunc(String s, int max) {

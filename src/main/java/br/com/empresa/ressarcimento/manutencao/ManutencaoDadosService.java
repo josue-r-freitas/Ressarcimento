@@ -6,7 +6,6 @@ import br.com.empresa.ressarcimento.pedidos.NotaEntradaRepository;
 import br.com.empresa.ressarcimento.pedidos.NotaSaidaRepository;
 import br.com.empresa.ressarcimento.pedidos.fluxo.AuditoriaEntradaConsumidaRepository;
 import br.com.empresa.ressarcimento.pedidos.fluxo.AuditoriaProdutoVendidoRepository;
-import br.com.empresa.ressarcimento.pedidos.fluxo.ExecucaoFluxoPedidoRepository;
 import br.com.empresa.ressarcimento.pedidos.fluxo.LogExecucaoFluxoRepository;
 import br.com.empresa.ressarcimento.pedidos.fluxo.audit.FluxoBAuditItemNfeEntradaRepository;
 import br.com.empresa.ressarcimento.pedidos.fluxo.audit.FluxoBAuditItemNfeSaidaRepository;
@@ -40,7 +39,6 @@ public class ManutencaoDadosService {
     private final AuditoriaEntradaConsumidaRepository auditoriaEntradaConsumidaRepository;
     private final AuditoriaProdutoVendidoRepository auditoriaProdutoVendidoRepository;
     private final LogExecucaoFluxoRepository logExecucaoFluxoRepository;
-    private final ExecucaoFluxoPedidoRepository execucaoFluxoPedidoRepository;
     private final ProcessamentoRessarcimentoRepository processamentoRessarcimentoRepository;
     private final NotaEntradaRepository notaEntradaRepository;
     private final ProdutoMatrizRepository produtoMatrizRepository;
@@ -68,9 +66,6 @@ public class ManutencaoDadosService {
         auditoriaEntradaConsumidaRepository.deleteAllInBatch();
         auditoriaProdutoVendidoRepository.deleteAllInBatch();
         logExecucaoFluxoRepository.deleteAllInBatch();
-        entityManager.flush();
-
-        execucaoFluxoPedidoRepository.deleteAllInBatch();
         entityManager.flush();
 
         notaEntradaRepository.deleteAllInBatch();

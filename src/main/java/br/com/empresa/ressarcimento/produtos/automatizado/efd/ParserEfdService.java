@@ -79,7 +79,11 @@ public class ParserEfdService {
                         BigDecimal qtd = parseDecimalSafe(p[5]);
                         String unid = p[6].trim();
                         if (numItem > 0 && !codItem.isEmpty() && !unid.isEmpty()) {
-                            ctx.nota.putItem(new C170Linha(numItem, codItem, unid, qtd));
+                            BigDecimal vlUnit = p.length > 7 ? parseDecimalSafe(p[7]) : null;
+                            String cfop = normalizarCfopC170(p, 11);
+                            // Após CFOP (p[11]) e COD_NAT (p[12]): VL_BC_ICMS, ALIQ_ICMS, VL_ICMS (p[13]–p[15]).
+                            BigDecimal vlIcms = p.length > 15 ? parseDecimalSafe(p[15]) : null;
+                            ctx.nota.putItem(new C170Linha(numItem, codItem, unid, qtd, vlUnit, cfop, vlIcms));
                         }
                     }
                     case "0190" -> {
@@ -179,5 +183,26 @@ public class ParserEfdService {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /**
+     * CFOP no C170: após CST_ICMS em {@code p[10]} (índice {@code p[11]}).
+     */
+    private static String normalizarCfopC170(String[] p, int idxCfop) {
+        if (p.length <= idxCfop) {
+            return null;
+        }
+        String raw = p[idxCfop].trim();
+        if (raw.isEmpty()) {
+            return null;
+        }
+        String d = raw.replaceAll("\\D", "");
+        if (d.isEmpty()) {
+            return null;
+        }
+        if (d.length() >= 4) {
+            return d.substring(0, 4);
+        }
+        return String.format("%4s", d).replace(' ', '0');
     }
 }

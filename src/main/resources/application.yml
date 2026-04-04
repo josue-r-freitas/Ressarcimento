@@ -24,7 +24,7 @@ logging:
     root: INFO
     br.com.empresa.ressarcimento: INFO
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{idExecucao:-}] %logger{36} - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{idProcessamento:-}] %logger{36} - %msg%n"
 
 # Swagger/OpenAPI (springdoc)
 springdoc:

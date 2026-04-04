@@ -97,8 +97,8 @@ public class PedidoController {
         return ResponseEntity.ok(fluxoPedidoAutomaticoService.listarExecucoes(pageable));
     }
 
-    @GetMapping("/rastreabilidade/{idExecucao}")
-    public ResponseEntity<RastreabilidadeFluxoDTO> rastreabilidade(@PathVariable Long idExecucao) {
-        return ResponseEntity.ok(fluxoPedidoAutomaticoService.rastreabilidade(idExecucao));
+    @GetMapping("/rastreabilidade/{idProcessamento}")
+    public ResponseEntity<RastreabilidadeFluxoDTO> rastreabilidade(@PathVariable Long idProcessamento) {
+        return ResponseEntity.ok(fluxoPedidoAutomaticoService.rastreabilidade(idProcessamento));
     }
 }

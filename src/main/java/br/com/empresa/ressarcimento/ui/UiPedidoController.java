@@ -113,7 +113,7 @@ public class UiPedidoController {
         try {
             GerarPedidoAutomaticoResponse resp = fluxoPedidoAutomaticoService.gerarAutomatico(ano, mes);
             redirectAttributes.addFlashAttribute("fluxoBSuccess", Boolean.TRUE);
-            redirectAttributes.addFlashAttribute("fluxoBIdExecucao", resp.getIdExecucao());
+            redirectAttributes.addFlashAttribute("fluxoBIdProcessamento", resp.getProcessamentoRessarcimentoId());
             redirectAttributes.addFlashAttribute("fluxoBArquivoPedidoId", resp.getArquivoPedidoId());
             redirectAttributes.addFlashAttribute("fluxoBStatus", resp.getStatus());
             redirectAttributes.addFlashAttribute("fluxoBAvisos", resp.getAvisos());

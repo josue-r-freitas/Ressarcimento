@@ -10,14 +10,14 @@
 
     <div th:if="${fluxoBSuccess}" class="alert alert-success">
         <p class="mb-2"><strong>Geração concluída.</strong> Status: <span th:text="${fluxoBStatus}">OK</span></p>
-        <p class="mb-2 small">idExecucao: <span th:text="${fluxoBIdExecucao}">0</span></p>
+        <p class="mb-2 small">idProcessamento: <span th:text="${fluxoBIdProcessamento}">0</span></p>
         <p class="mb-2" th:if="${fluxoBArquivoPedidoId != null}">
             <a class="btn btn-sm btn-outline-primary"
                th:href="@{/ui/pedidos/historico/{id}/download(id=${fluxoBArquivoPedidoId})}">
                 Baixar XML gerado
             </a>
             <a class="btn btn-sm btn-outline-secondary ms-1"
-               th:href="@{/api/pedidos/rastreabilidade/{id}(id=${fluxoBIdExecucao})}" target="_blank" rel="noopener">
+               th:href="@{/api/pedidos/rastreabilidade/{id}(id=${fluxoBIdProcessamento})}" target="_blank" rel="noopener">
                 Rastreabilidade (JSON)
             </a>
         </p>

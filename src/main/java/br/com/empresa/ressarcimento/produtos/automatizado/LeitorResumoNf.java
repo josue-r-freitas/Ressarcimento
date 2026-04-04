@@ -4,6 +4,7 @@ import br.com.empresa.ressarcimento.planilhas.dto.ResumoNfLinhaDTO;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.text.Normalizer;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -16,8 +17,10 @@ import java.util.Map;
 import java.util.Optional;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
+import org.apache.poi.ss.usermodel.CellValue;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.DateUtil;
+import org.apache.poi.ss.usermodel.FormulaEvaluator;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -30,20 +33,65 @@ public class LeitorResumoNf {
     private static final DataFormatter DATA_FORMATTER = new DataFormatter(Locale.ROOT);
 
     /**
-     * Colunas opcionais (além das obrigatórias) para staging Fluxo B — ver {@link ResumoNfLinhaDTO}.
-     * Cabeçalhos após {@link #normalizarTituloColuna(String)}.
+     * Colunas opcionais do resumonf.xlsx para staging Fluxo B — ver {@link ResumoNfLinhaDTO}.
+     * Cabeçalhos oficiais: {@code QTDE. UNITÁRIA}, {@code VALOR UNITÁRIO}, {@code CODG. CFOP}, {@code VALOR IMPOSTO}
+     * (após {@link #normalizarTituloColuna(String)}).
      */
     private static final String[] COL_NR_NOTA = {"NR. NOTA", "NR NOTA", "NUMERO NOTA", "NÚMERO NOTA"};
 
+    /** Prioridade: cabeçalhos oficiais do resumonf.xlsx (TRIBUTO / ressarcimento). */
     private static final String[] COL_QTD_UNIT = {
-        "QTD. UNIT.", "QUANTIDADE", "QTDE. UNIT.", "QTD UNIT", "QUANTIDADE UNITÁRIA", "QUANTIDADE UNITARIA"
+        "QTDE. UNITÁRIA",
+        "QTDE. UNITARIA",
+        "QTD. UNIT.",
+        "QUANTIDADE",
+        "QTDE. UNIT.",
+        "QTD UNIT",
+        "QUANTIDADE UNITÁRIA",
+        "QUANTIDADE UNITARIA",
+        "QTD",
+        "QTDE",
+        "QTDE UNIT",
+        "QTDE. UNIT.",
+        "QUANTIDADE COMPRADA",
+        "QTD COMPRA",
+        "QTD. COMPRA",
+        "QTD UNITÁRIA",
+        "QTD UNITARIA"
     };
-    private static final String[] COL_VL_UNIT = {"VL. UNIT.", "VALOR UNIT.", "VALOR UNITÁRIO", "VALOR UNITARIO", "VLR. UNIT."};
-    private static final String[] COL_CFOP = {"CFOP"};
-    private static final String[] COL_VL_IMPOSTO = {"VL. IMPOSTO.", "VALOR IMPOSTO", "VL. ICMS", "VALOR ICMS"};
+    private static final String[] COL_VL_UNIT = {
+        "VALOR UNITÁRIO",
+        "VALOR UNITARIO",
+        "VL. UNIT.",
+        "VALOR UNIT.",
+        "VLR. UNIT.",
+        "VLR UNIT",
+        "VL UNIT",
+        "PREC UNIT",
+        "PREÇO UNITÁRIO",
+        "PRECO UNITARIO",
+        "VALOR UNIT COMPRA",
+        "VL UNITÁRIO",
+        "VL UNITARIO"
+    };
+    private static final String[] COL_CFOP = {"CODG. CFOP", "CODG CFOP", "CFOP", "C.F.O.P."};
+    private static final String[] COL_VL_IMPOSTO = {
+        "VALOR IMPOSTO",
+        "VL. IMPOSTO.",
+        "VL. ICMS",
+        "VALOR ICMS",
+        "VL ICMS",
+        "VLR ICMS",
+        "VL ICMS ST",
+        "VALOR ICMS ST",
+        "ICMS",
+        "VL. ICMS ST",
+        "VALOR ST"
+    };
 
     public List<ResumoNfLinhaDTO> lerExcel(InputStream inputStream) throws IOException {
         try (Workbook workbook = new XSSFWorkbook(inputStream)) {
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
             Sheet sheet = workbook.getSheetAt(0);
             Row headerRow = sheet.getRow(0);
             if (headerRow == null) {
@@ -72,24 +120,24 @@ public class LeitorResumoNf {
                     continue;
                 }
                 int rowNum = r + 1;
-                String dataApresStr = getCellString(row.getCell(idxDataApres));
+                String dataApresStr = getCellString(row.getCell(idxDataApres), evaluator);
                 if (dataApresStr == null || dataApresStr.isBlank()) {
                     continue;
                 }
                 Optional<LocalDate> dataApres = parseData(dataApresStr, row.getCell(idxDataApres));
-                String chave = normalizarChave(getCellString(row.getCell(idxChave)));
-                int seqItem = parseInt(getCellString(row.getCell(idxSeq)), row.getCell(idxSeq));
-                String codg = getCellString(row.getCell(idxCodg));
+                String chave = normalizarChave(getCellString(row.getCell(idxChave), evaluator));
+                int seqItem = parseInt(getCellString(row.getCell(idxSeq), evaluator), row.getCell(idxSeq));
+                String codg = getCellString(row.getCell(idxCodg), evaluator);
                 if (codg == null || codg.trim().isEmpty()) {
                     continue;
                 }
-                String cnpj = normalizarCnpj(getCellString(row.getCell(idxCnpj)));
-                String trib = idxTributo != null ? getCellString(row.getCell(idxTributo)) : null;
-                String nrNota = idxNrNota != null ? trimOrNull(getCellString(row.getCell(idxNrNota))) : null;
-                String rawQtd = idxQtd != null ? getCellString(row.getCell(idxQtd)) : null;
-                String rawVl = idxVlUnit != null ? getCellString(row.getCell(idxVlUnit)) : null;
-                String rawCfop = idxCfop != null ? getCellString(row.getCell(idxCfop)) : null;
-                String rawImp = idxVlImposto != null ? getCellString(row.getCell(idxVlImposto)) : null;
+                String cnpj = normalizarCnpj(getCellString(row.getCell(idxCnpj), evaluator));
+                String trib = idxTributo != null ? getCellString(row.getCell(idxTributo), evaluator) : null;
+                String nrNota = idxNrNota != null ? trimOrNull(getCellString(row.getCell(idxNrNota), evaluator)) : null;
+                String rawQtd = idxQtd != null ? getCellString(row.getCell(idxQtd), evaluator) : null;
+                String rawVl = idxVlUnit != null ? getCellString(row.getCell(idxVlUnit), evaluator) : null;
+                String rawCfop = idxCfop != null ? getCellString(row.getCell(idxCfop), evaluator) : null;
+                String rawImp = idxVlImposto != null ? getCellString(row.getCell(idxVlImposto), evaluator) : null;
                 linhas.add(ResumoNfLinhaDTO.builder()
                         .numeroLinhaPlanilha(rowNum)
                         .chave(chave != null ? chave : "")
@@ -99,10 +147,13 @@ public class LeitorResumoNf {
                         .dataApresentacao(dataApres.orElse(null))
                         .tributo(trib != null ? trib.trim() : null)
                         .nrNota(nrNota)
-                        .qtdUnitCompra(parseDecimalCell(idxQtd != null ? row.getCell(idxQtd) : null, rawQtd))
-                        .valorUnitario(parseDecimalCell(idxVlUnit != null ? row.getCell(idxVlUnit) : null, rawVl))
+                        .qtdUnitCompra(
+                                parseDecimalCell(idxQtd != null ? row.getCell(idxQtd) : null, rawQtd, evaluator))
+                        .valorUnitario(
+                                parseDecimalCell(idxVlUnit != null ? row.getCell(idxVlUnit) : null, rawVl, evaluator))
                         .cfop(trimOrNull(rawCfop))
-                        .valorImposto(parseDecimalCell(idxVlImposto != null ? row.getCell(idxVlImposto) : null, rawImp))
+                        .valorImposto(parseDecimalCell(
+                                idxVlImposto != null ? row.getCell(idxVlImposto) : null, rawImp, evaluator))
                         .build());
             }
             linhas.sort(Comparator.comparing(ResumoNfLinhaDTO::getChave).thenComparingInt(ResumoNfLinhaDTO::getSeqItem));
@@ -140,14 +191,40 @@ public class LeitorResumoNf {
         return s.trim();
     }
 
-    private static BigDecimal parseDecimalCell(Cell cell, String raw) {
-        if (cell != null && cell.getCellType() == CellType.NUMERIC && !DateUtil.isCellDateFormatted(cell)) {
-            return BigDecimal.valueOf(cell.getNumericCellValue());
+    /**
+     * Lê número da célula: trata {@link CellType#FORMULA} (valor em cache ou via {@link FormulaEvaluator}),
+     * e texto com máscara de moeda (ex.: {@code R$ 20,91}) comum em colunas como VALOR IMPOSTO.
+     */
+    private static BigDecimal parseDecimalCell(Cell cell, String raw, FormulaEvaluator evaluator) {
+        if (cell != null) {
+            CellType tipo = cell.getCellType();
+            if (tipo == CellType.FORMULA && evaluator != null) {
+                try {
+                    CellValue cv = evaluator.evaluate(cell);
+                    if (cv != null) {
+                        if (cv.getCellType() == CellType.NUMERIC) {
+                            return BigDecimal.valueOf(cv.getNumberValue());
+                        }
+                        if (cv.getCellType() == CellType.STRING) {
+                            raw = cv.getStringValue();
+                        }
+                    }
+                } catch (Exception ignored) {
+                    // segue para tipo em cache / texto formatado
+                }
+                tipo = cell.getCachedFormulaResultType();
+            }
+            if (tipo == CellType.NUMERIC && !DateUtil.isCellDateFormatted(cell)) {
+                return BigDecimal.valueOf(cell.getNumericCellValue());
+            }
         }
         if (raw == null || raw.isBlank()) {
             return null;
         }
-        String t = raw.trim().replace('\u00A0', ' ').replace(" ", "");
+        String t = limparTextoNumericoBr(raw);
+        if (t.isEmpty()) {
+            return null;
+        }
         if (t.contains(".") && t.contains(",")) {
             t = t.replace(".", "").replace(',', '.');
         } else if (t.contains(",")) {
@@ -160,22 +237,37 @@ public class LeitorResumoNf {
         }
     }
 
+    /** Remove prefixos de moeda, % e espaços usados em formatos contábeis do Excel. */
+    static String limparTextoNumericoBr(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String t = raw.replace('\u00A0', ' ').trim();
+        t = t.replaceAll("(?i)\\s*R\\$\\s*", "");
+        t = t.replaceAll("(?i)US\\$\\s*", "");
+        t = t.replaceAll("(?U)\\$\\s*", "");
+        t = t.replaceAll("(?i)\\s*%\\s*$", "");
+        return t.replace(" ", "");
+    }
+
     static String normalizarTituloColuna(String s) {
         if (s == null) {
             return "";
         }
         String t = s.replace('\u00A0', ' ').trim().toUpperCase(Locale.ROOT).replaceAll("\\s+", " ");
+        t = Normalizer.normalize(t, Normalizer.Form.NFD).replaceAll("\\p{M}+", "");
         return t;
     }
 
-    private static String getCellString(Cell cell) {
+    private static String getCellString(Cell cell, FormulaEvaluator evaluator) {
         if (cell == null) {
             return null;
         }
-        if (cell.getCellType() == CellType.NUMERIC && DateUtil.isCellDateFormatted(cell)) {
-            return DATA_FORMATTER.formatCellValue(cell);
-        }
-        return DATA_FORMATTER.formatCellValue(cell).trim();
+        String v = evaluator != null
+                ? DATA_FORMATTER.formatCellValue(cell, evaluator)
+                : DATA_FORMATTER.formatCellValue(cell);
+        v = v != null ? v.trim() : "";
+        return v.isEmpty() ? null : v;
     }
 
     private static Optional<LocalDate> parseData(String texto, Cell cell) {

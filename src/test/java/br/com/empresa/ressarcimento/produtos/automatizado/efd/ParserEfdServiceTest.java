@@ -22,7 +22,7 @@ class ParserEfdServiceTest {
                 |0200|ITEM01|Produto integracao|||UN|
                 |0220|CX|2,500000|
                 |C100|0|0|FORN|55|00|1|999|%s|01012024|
-                |C170|1|ITEM01|X|10|UN|
+                |C170|1|ITEM01|X|10|UN|5,5|55|0|060|1102|6|100|18|2,5|
                 """
                         .formatted(CHAVE);
         Files.writeString(dir.resolve("efd.txt"), conteudo, java.nio.charset.StandardCharsets.ISO_8859_1);
@@ -34,6 +34,9 @@ class ParserEfdServiceTest {
                     assertThat(c.codItem()).isEqualTo("ITEM01");
                     assertThat(c.unid()).isEqualTo("UN");
                     assertThat(c.qtd()).isEqualByComparingTo(new BigDecimal("10"));
+                    assertThat(c.vlUnit()).isEqualByComparingTo(new BigDecimal("5.5"));
+                    assertThat(c.cfop()).isEqualTo("1102");
+                    assertThat(c.vlIcms()).isEqualByComparingTo(new BigDecimal("2.5"));
                 });
         assertThat(indice.infoItem("ITEM01")).hasValueSatisfying(i -> {
             assertThat(i.getDescrItem()).isEqualTo("Produto integracao");

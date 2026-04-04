@@ -96,7 +96,7 @@ class ProcessamentoRessarcimentoServiceTest {
         when(fluxoPedidoAutomaticoService.gerarAutomatico(2024, 7, 42L))
                 .thenReturn(GerarPedidoAutomaticoResponse.builder()
                         .arquivoPedidoId(9L)
-                        .idExecucao(3L)
+                        .processamentoRessarcimentoId(42L)
                         .status("CONCLUIDO")
                         .build());
         when(produtoService.gerarXmlRetornandoIdArquivo(42L)).thenReturn(77L);
