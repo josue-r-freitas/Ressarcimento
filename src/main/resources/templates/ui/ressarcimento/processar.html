@@ -15,8 +15,12 @@
     <div th:if="${processarError}" class="alert alert-danger" th:text="${processarError}">Erro</div>
 
     <div th:if="${processarSuccess}" class="alert alert-success">
-        <p class="mb-2"><strong>Processamento concluído.</strong> Id do processamento:
-            <code th:text="${processamentoId}">0</code> · Status Fluxo B:
+        <p class="mb-2">
+            <strong th:text="${processamentoStatus == 'CONCLUIDO_COM_AVISOS' ? 'Processamento concluído com avisos.' : 'Processamento concluído.'}">Processamento concluído.</strong>
+            Id do processamento:
+            <code th:text="${processamentoId}">0</code> · Status:
+            <span th:text="${processamentoStatus != null ? processamentoStatus : 'CONCLUIDO'}">OK</span>
+            · Status Fluxo B:
             <span th:text="${fluxoBStatus}">OK</span></p>
         <p class="mb-2 small text-muted">Período: <span th:text="${processarAno}">2024</span> /
             <span th:text="${processarMes}">1</span></p>
@@ -27,6 +31,10 @@
             </a>
         </p>
         <div class="d-flex flex-wrap gap-2 mb-2">
+            <a th:if="${baixarPlanilhaProdutos != null and baixarPlanilhaProdutos and processamentoId != null}" class="btn btn-sm btn-success"
+               th:href="@{/ui/ressarcimento/processar/{id}/planilha-produtos(id=${processamentoId})}">
+                Baixar planilha de produtos
+            </a>
             <a th:if="${arquivoPedidoId != null}" class="btn btn-sm btn-primary"
                th:href="@{/ui/pedidos/historico/{id}/download(id=${arquivoPedidoId})}">
                 Baixar XML de pedidos
@@ -36,6 +44,10 @@
                 Baixar XML de produtos (deste processamento)
             </a>
         </div>
+        <p th:if="${baixarPlanilhaProdutos != null and baixarPlanilhaProdutos}" class="small text-muted mb-2">
+            A planilha gerada no Fluxo A (<code>planilha_produtos.xlsx</code>) foi transferida automaticamente.
+            O link acima só funciona uma vez por processamento; para obter novamente, execute o pipeline outra vez.
+        </p>
 
         <p class="mb-2 small text-muted">Para gerar novamente com a mesma lógica do botão
             <strong>Baixar XML</strong> em Produtos → Gerar XML (nova gravação no histórico):</p>
@@ -50,6 +62,15 @@
                 <li th:each="a : ${fluxoBAvisos}" th:text="${a}">aviso</li>
             </ul>
         </div>
+    </div>
+
+    <div th:if="${produtosAvisos != null and !produtosAvisos.isEmpty()}"
+         class="alert alert-warning">
+        <strong>Códigos em item_nota_saida sem produto na matriz</strong>
+        <span class="small"> (não incluídos no XML de produtos):</span>
+        <ul class="small mb-0 mt-2">
+            <li th:each="c : ${produtosAvisos}" th:text="${c}">codigo</li>
+        </ul>
     </div>
 
     <form th:action="@{/ui/ressarcimento/processar}" method="post" id="formProcessar" class="card shadow-sm">
@@ -83,6 +104,16 @@
         if (b) { b.disabled = true; b.textContent = 'A processar…'; }
         if (m) m.classList.remove('d-none');
     });
+</script>
+<script th:if="${processarSuccess != null and processarSuccess and baixarPlanilhaProdutos != null and baixarPlanilhaProdutos and processamentoId != null}" th:inline="javascript">
+    (function () {
+        var url = /*[[@{/ui/ressarcimento/processar/{id}/planilha-produtos(id=${processamentoId})}]]*/ '';
+        if (!url) return;
+        var iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.src = url;
+        document.body.appendChild(iframe);
+    })();
 </script>
 </body>
 </html>

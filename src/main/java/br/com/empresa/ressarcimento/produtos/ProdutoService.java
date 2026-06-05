@@ -6,8 +6,9 @@ import br.com.empresa.ressarcimento.pedidos.ItemNotaSaidaRepository;
 import br.com.empresa.ressarcimento.pedidos.fluxo.audit.FluxoBAuditStagingService;
 import br.com.empresa.ressarcimento.planilhas.LeitorPlanilhaProdutos;
 import br.com.empresa.ressarcimento.planilhas.dto.ProdutoPlanilhaDTO;
-import br.com.empresa.ressarcimento.produtos.api.ProdutoDTO;
 import br.com.empresa.ressarcimento.produtos.api.ArquivoProdutosDTO;
+import br.com.empresa.ressarcimento.produtos.api.ProdutoDTO;
+import br.com.empresa.ressarcimento.produtos.api.ResultadoGeracaoXmlProdutos;
 import br.com.empresa.ressarcimento.processamento.ProcessamentoRessarcimentoLifecycle;
 import br.com.empresa.ressarcimento.processamento.ProcessamentoRessarcimentoRepository;
 import br.com.empresa.ressarcimento.processamento.domain.ProcessamentoRessarcimento;
@@ -37,6 +38,9 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 @RequiredArgsConstructor
 public class ProdutoService {
+
+    public static final String STATUS_ARQUIVO_GERADO = "GERADO";
+    public static final String STATUS_ARQUIVO_GERADO_COM_AVISOS = "GERADO_COM_AVISOS";
 
     private final ProdutoMatrizRepository produtoRepository;
     private final ArquivoProdutosRepository arquivoRepository;
@@ -172,10 +176,49 @@ public class ProdutoService {
         return persistirGeracaoXml(processamentoRessarcimentoId).getId();
     }
 
+    /**
+     * Geração parcial para o pipeline «Processar ressarcimento»: inclui no XML apenas códigos com matriz
+     * (mínimo 1) e devolve avisos para os demais.
+     */
+    @Transactional
+    public ResultadoGeracaoXmlProdutos gerarXmlParcialParaPipeline(long processamentoRessarcimentoId)
+            throws JAXBException {
+        ResolucaoProdutosParaXml resolucao = resolverProdutosParaXml(processamentoRessarcimentoId);
+        if (resolucao.produtosComMatriz().isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Nenhum código de produto em item_nota_saida possui produto correspondente na matriz.");
+        }
+        ArquivoProdutos salvo = persistirArquivoProdutos(
+                processamentoRessarcimentoId,
+                resolucao.declarante(),
+                resolucao.produtosComMatriz(),
+                resolucao.codigosSemMatriz());
+        return ResultadoGeracaoXmlProdutos.builder()
+                .arquivoProdutosId(salvo.getId())
+                .codigosIncluidosNoXml(resolucao.codigosIncluidosNoXml())
+                .codigosSemMatriz(resolucao.codigosSemMatriz())
+                .build();
+    }
+
     private ArquivoProdutos persistirGeracaoXml(long processamentoRessarcimentoId) throws JAXBException {
+        ResolucaoProdutosParaXml resolucao = resolverProdutosParaXml(processamentoRessarcimentoId);
+        if (!resolucao.codigosSemMatriz().isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Existem códigos em item_nota_saida sem produto correspondente na matriz: "
+                            + String.join(", ", resolucao.codigosSemMatriz()));
+        }
+        return persistirArquivoProdutos(
+                processamentoRessarcimentoId,
+                resolucao.declarante(),
+                resolucao.produtosComMatriz(),
+                List.of());
+    }
+
+    private ResolucaoProdutosParaXml resolverProdutosParaXml(long processamentoRessarcimentoId) {
         Declarante declarante = declaranteService.getEntidadeOuLanca();
-        List<String> codigosEmNotas = itemNotaSaidaRepository.findDistinctCodInternoProdutoByNotaSaidaDeclaranteIdAndProcessamentoId(
-                declarante.getId(), processamentoRessarcimentoId);
+        List<String> codigosEmNotas = itemNotaSaidaRepository
+                .findDistinctCodInternoProdutoByNotaSaidaDeclaranteIdAndProcessamentoId(
+                        declarante.getId(), processamentoRessarcimentoId);
         if (codigosEmNotas.isEmpty()) {
             throw new IllegalArgumentException(
                     "Não há códigos de produto em itens de notas de saída deste processamento "
@@ -194,27 +237,40 @@ public class ProdutoService {
                 .sorted()
                 .distinct()
                 .toList();
-        if (!semMatriz.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "Existem códigos em item_nota_saida sem produto correspondente na matriz: "
-                            + String.join(", ", semMatriz));
-        }
-        List<ProdutoMatriz> produtos = codigosEmNotas.stream()
+        List<String> incluidos = codigosEmNotas.stream()
+                .filter(umPorCodigo::containsKey)
                 .sorted()
                 .distinct()
-                .map(umPorCodigo::get)
                 .toList();
+        List<ProdutoMatriz> produtos = incluidos.stream().map(umPorCodigo::get).toList();
+        return new ResolucaoProdutosParaXml(declarante, produtos, incluidos, semMatriz);
+    }
+
+    private ArquivoProdutos persistirArquivoProdutos(
+            long processamentoRessarcimentoId,
+            Declarante declarante,
+            List<ProdutoMatriz> produtos,
+            List<String> codigosSemMatriz)
+            throws JAXBException {
         String xml = geradorXml.gerar(declarante, produtos);
+        boolean comAvisos = codigosSemMatriz != null && !codigosSemMatriz.isEmpty();
         ArquivoProdutos salvo = ArquivoProdutos.builder()
                 .declarante(declarante)
                 .dataGeracao(LocalDateTime.now())
-                .status("GERADO")
+                .status(comAvisos ? STATUS_ARQUIVO_GERADO_COM_AVISOS : STATUS_ARQUIVO_GERADO)
+                .mensagemLog(comAvisos ? "Sem matriz: " + String.join(", ", codigosSemMatriz) : null)
                 .xmlContent(xml)
                 .processamentoRessarcimento(
                         processamentoRessarcimentoRepository.getReferenceById(processamentoRessarcimentoId))
                 .build();
         return arquivoRepository.save(salvo);
     }
+
+    private record ResolucaoProdutosParaXml(
+            Declarante declarante,
+            List<ProdutoMatriz> produtosComMatriz,
+            List<String> codigosIncluidosNoXml,
+            List<String> codigosSemMatriz) {}
 
     @Transactional(readOnly = true)
     public List<ArquivoProdutosDTO> listarHistorico(Pageable pageable) {

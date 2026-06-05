@@ -167,8 +167,8 @@ public class FluxoPedidoAutomaticoService {
                 throw new IOException("Falha ao gravar staging de auditoria (resumo NF entrada): " + e.getMessage(), e);
             }
 
-            Map<String, ArrayDeque<EntradaFifoSlot>> estoqueFifo =
-                    construirEstoqueFifo(linhasResumo, indice, procRef, avisos);
+            Map<String, ArrayDeque<EntradaDuplaSlot>> estoqueEntradaPorDupla =
+                    construirEstoqueEntradaPorDupla(linhasResumo, indice, procRef, avisos);
 
             List<NotaSaida> notasMontadas = new ArrayList<>();
 
@@ -248,7 +248,8 @@ public class FluxoPedidoAutomaticoService {
                         .build();
 
                 for (ItemNfeCfop ix : itensXml) {
-                    Optional<ProdutoMatriz> pmOpt = resolverProdutoPorCProdSaida(ix.cProd());
+                    Optional<ProdutoMatriz> pmOpt =
+                            resolverProdutoMatrizParaVenda(ix.cProd(), estoqueEntradaPorDupla);
                     if (pmOpt.isEmpty()) {
                         String msg = "Sem mapeamento de produto para cProd=" + ix.cProd() + " na saída " + chaveSaida;
                         avisos.add(msg);
@@ -259,7 +260,8 @@ public class FluxoPedidoAutomaticoService {
                     String codInt = pm.getCodInternoProduto();
 
                     BigDecimal qVenda = converterQuantidadeVenda(ix, pm);
-                    ResultadoConsumoFifo consumo = consumirFifo(qVenda, codInt, estoqueFifo, procRef);
+                    ResultadoVinculoEntrada consumo =
+                            consumirEntradasPorDupla(qVenda, pm, codInt, estoqueEntradaPorDupla, procRef);
 
                     ItemNotaSaida item = ItemNotaSaida.builder()
                             .notaSaida(ns)
@@ -445,7 +447,7 @@ public class FluxoPedidoAutomaticoService {
     }
 
     /**
-     * Atualiza ou cria {@link NotaEntrada} para cada chave referenciada nos itens em memória (principal + FIFO).
+     * Atualiza ou cria {@link NotaEntrada} para cada chave referenciada nos itens em memória (principal + vinculadas).
      */
     private void alinharProcessamentoEntradasReferenciadasPelosItens(
             ProcessamentoRessarcimento procRef,
@@ -493,6 +495,56 @@ public class FluxoPedidoAutomaticoService {
         return produtoMatrizRepository.findFirstByCodInternoProduto(cProd.trim());
     }
 
+    /**
+     * Resolve matriz para montagem da operação (passos 4–7): preferência por linha cuja dupla fornecedor possui
+     * entradas no estoque quando há várias linhas com o mesmo {@code cod_interno_produto}.
+     */
+    private Optional<ProdutoMatriz> resolverProdutoMatrizParaVenda(
+            String cProd, Map<String, ArrayDeque<EntradaDuplaSlot>> estoqueEntradaPorDupla) {
+        if (cProd == null || cProd.isBlank()) {
+            return Optional.empty();
+        }
+        List<ProdutoMatriz> candidatos = produtoMatrizRepository.findByCodInternoProduto(cProd.trim());
+        if (candidatos.isEmpty()) {
+            return Optional.empty();
+        }
+        if (candidatos.size() == 1) {
+            return Optional.of(candidatos.get(0));
+        }
+        return candidatos.stream()
+                .filter(pm -> {
+                    String chave = chaveDuplaMatriz(pm);
+                    if (chave == null) {
+                        return false;
+                    }
+                    ArrayDeque<EntradaDuplaSlot> fila = estoqueEntradaPorDupla.get(chave);
+                    return fila != null && !fila.isEmpty();
+                })
+                .findFirst()
+                .or(() -> Optional.of(candidatos.get(0)));
+    }
+
+    static String chaveDuplaMatriz(ProdutoMatriz pm) {
+        if (pm == null) {
+            return null;
+        }
+        return chaveDupla(normalizarCnpj14(pm.getCnpjFornecedor()), pm.getCodProdFornecedor());
+    }
+
+    static String chaveDuplaResumo(ResumoNfLinhaDTO linha) {
+        if (linha == null) {
+            return null;
+        }
+        return chaveDupla(normalizarCnpj14(linha.getCnpjFornecedor()), linha.getCodgItem());
+    }
+
+    static String chaveDupla(String cnpj14, String codProdFornecedor) {
+        if (!StringUtils.hasText(cnpj14) || !StringUtils.hasText(codProdFornecedor)) {
+            return null;
+        }
+        return cnpj14 + "|" + codProdFornecedor.trim();
+    }
+
     private static BigDecimal converterQuantidadeVenda(ItemNfeCfop ix, ProdutoMatriz pm) {
         BigDecimal q = ix.qCom() != null ? ix.qCom() : BigDecimal.ZERO;
         if (ix.uCom() != null
@@ -529,7 +581,11 @@ public class FluxoPedidoAutomaticoService {
         return !c170.unid().trim().equalsIgnoreCase(pm.getUnidadeInternaProduto().trim());
     }
 
-    private Map<String, ArrayDeque<EntradaFifoSlot>> construirEstoqueFifo(
+    /**
+     * Monta filas de entrada por dupla fornecedor (CNPJ + {@code cod_prod_fornecedor} / {@code CODG. ITEM} do resumo),
+     * validando cada linha do resumo na EFD (chave + seq. item + cod_interno da matriz) — passos 4–6 antes do loop de saídas.
+     */
+    Map<String, ArrayDeque<EntradaDuplaSlot>> construirEstoqueEntradaPorDupla(
             List<ResumoNfLinhaDTO> linhasResumo,
             EfdIndice indice,
             ProcessamentoRessarcimento proc,
@@ -542,8 +598,12 @@ public class FluxoPedidoAutomaticoService {
                         .thenComparingInt(ResumoNfLinhaDTO::getSeqItem))
                 .toList();
 
-        Map<String, ArrayDeque<EntradaFifoSlot>> map = new LinkedHashMap<>();
+        Map<String, ArrayDeque<EntradaDuplaSlot>> map = new LinkedHashMap<>();
         for (ResumoNfLinhaDTO linha : ordenadas) {
+            String dupla = chaveDuplaResumo(linha);
+            if (dupla == null) {
+                continue;
+            }
             if (linha.getChave() == null || linha.getChave().length() != 44) {
                 continue;
             }
@@ -551,44 +611,52 @@ public class FluxoPedidoAutomaticoService {
             if (notaEnt.isEmpty()) {
                 continue;
             }
-            var c170Opt = notaEnt.get().findItem(linha.getSeqItem());
+            String cnpj = normalizarCnpj14(linha.getCnpjFornecedor());
+            String codForn = linha.getCodgItem() != null ? linha.getCodgItem().trim() : null;
+            if (cnpj == null || !StringUtils.hasText(codForn)) {
+                continue;
+            }
+            List<ProdutoMatriz> matrizes =
+                    produtoMatrizRepository.findByCnpjFornecedorAndCodProdFornecedor(cnpj, codForn);
+            if (matrizes.isEmpty()) {
+                String msg = "Vínculo entrada: sem produto na matriz para dupla CNPJ+cod.fornc (chave "
+                        + linha.getChave() + ", codg=" + codForn + ")";
+                avisos.add(msg);
+                addLog(proc, "WARN", "VINCULO_ENTRADA", msg, linha.getChave());
+                continue;
+            }
+            ProdutoMatriz pm = matrizes.get(0);
+            var c170Opt = notaEnt.get().findItem(linha.getSeqItem(), pm.getCodInternoProduto());
             if (c170Opt.isEmpty()) {
                 continue;
             }
             C170Linha c170 = c170Opt.get();
-            String codInt = c170.codItem();
-            Optional<ProdutoMatriz> pmOpt = produtoMatrizRepository.findFirstByCodInternoProduto(codInt);
-            if (pmOpt.isEmpty()) {
-                String msg = "FIFO: sem produto na matriz para COD_ITEM=" + codInt + " (chave " + linha.getChave() + ")";
-                avisos.add(msg);
-                addLog(proc, "WARN", "ESTOQUE_FIFO", msg, linha.getChave());
-                continue;
-            }
-            ProdutoMatriz pm = pmOpt.get();
             BigDecimal qtyInt = converterQuantidadeEntradaC170(c170, pm);
             if (qtyInt.compareTo(BigDecimal.ZERO) <= 0) {
                 continue;
             }
-            map.computeIfAbsent(codInt, k -> new ArrayDeque<>())
-                    .addLast(new EntradaFifoSlot(linha, c170, pm, qtyInt));
+            map.computeIfAbsent(dupla, k -> new ArrayDeque<>())
+                    .addLast(new EntradaDuplaSlot(linha, c170, pm, qtyInt));
         }
         return map;
     }
 
-    private static ResultadoConsumoFifo consumirFifo(
+    static ResultadoVinculoEntrada consumirEntradasPorDupla(
             BigDecimal qVendaInterna,
-            String codInterno,
-            Map<String, ArrayDeque<EntradaFifoSlot>> estoque,
+            ProdutoMatriz pm,
+            String codInternoVenda,
+            Map<String, ArrayDeque<EntradaDuplaSlot>> estoque,
             ProcessamentoRessarcimento processamentoRessarcimento) {
         BigDecimal need = qVendaInterna != null ? qVendaInterna : BigDecimal.ZERO;
         if (need.compareTo(BigDecimal.ZERO) < 0) {
             need = BigDecimal.ZERO;
         }
 
-        ArrayDeque<EntradaFifoSlot> fila = estoque.get(codInterno);
+        String dupla = chaveDuplaMatriz(pm);
+        ArrayDeque<EntradaDuplaSlot> fila = dupla != null ? estoque.get(dupla) : null;
         if (fila == null || fila.isEmpty() || need.compareTo(BigDecimal.ZERO) == 0) {
             boolean ok = need.compareTo(BigDecimal.ZERO) == 0;
-            return new ResultadoConsumoFifo(
+            return new ResultadoVinculoEntrada(
                     ok,
                     BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP),
                     null,
@@ -602,7 +670,11 @@ public class FluxoPedidoAutomaticoService {
         BigDecimal totalCompras = BigDecimal.ZERO;
 
         while (need.compareTo(BigDecimal.ZERO) > 0 && !fila.isEmpty()) {
-            EntradaFifoSlot slot = fila.peekFirst();
+            EntradaDuplaSlot slot = fila.peekFirst();
+            if (!codInternoCompativel(slot.c170, codInternoVenda)) {
+                fila.pollFirst();
+                continue;
+            }
             BigDecimal take = need.min(slot.remainingInterno);
             slot.remainingInterno = slot.remainingInterno.subtract(take);
             need = need.subtract(take);
@@ -646,12 +718,19 @@ public class FluxoPedidoAutomaticoService {
         }
 
         boolean suficiente = need.compareTo(BigDecimal.ZERO) <= 0;
-        return new ResultadoConsumoFifo(
+        return new ResultadoVinculoEntrada(
                 suficiente,
                 totalCompras.setScale(6, RoundingMode.HALF_UP),
                 primeira,
                 chaves,
                 linhas);
+    }
+
+    private static boolean codInternoCompativel(C170Linha c170, String codInterno) {
+        if (c170 == null || c170.codItem() == null || codInterno == null) {
+            return false;
+        }
+        return c170.codItem().trim().equalsIgnoreCase(codInterno.trim());
     }
 
     private static String blankToNull(String s) {
@@ -669,21 +748,21 @@ public class FluxoPedidoAutomaticoService {
         return d.length() == 14 ? d : null;
     }
 
-    private record ResultadoConsumoFifo(
+    record ResultadoVinculoEntrada(
             boolean suficiente,
             BigDecimal totalComprasInterno,
             NotaEntrada primeiraEntrada,
             LinkedHashSet<String> chaves,
             List<AuditoriaEntradaConsumida> linhasAuditoria) {}
 
-    private static final class EntradaFifoSlot {
+    static final class EntradaDuplaSlot {
         final ResumoNfLinhaDTO linha;
         final C170Linha c170;
         final ProdutoMatriz pm;
         final BigDecimal initialInterno;
         BigDecimal remainingInterno;
 
-        EntradaFifoSlot(ResumoNfLinhaDTO linha, C170Linha c170, ProdutoMatriz pm, BigDecimal qtyInterno) {
+        EntradaDuplaSlot(ResumoNfLinhaDTO linha, C170Linha c170, ProdutoMatriz pm, BigDecimal qtyInterno) {
             this.linha = linha;
             this.c170 = c170;
             this.pm = pm;

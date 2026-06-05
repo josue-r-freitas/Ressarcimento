@@ -34,6 +34,7 @@ public class ProcessamentoRessarcimento {
 
     public static final String STATUS_EM_ANDAMENTO = "EM_ANDAMENTO";
     public static final String STATUS_CONCLUIDO = "CONCLUIDO";
+    public static final String STATUS_CONCLUIDO_COM_AVISOS = "CONCLUIDO_COM_AVISOS";
     public static final String STATUS_ERRO = "ERRO";
 
     @Id

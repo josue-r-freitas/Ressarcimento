@@ -6,6 +6,7 @@ import br.com.empresa.ressarcimento.processamento.domain.ProcessamentoRessarcime
 import br.com.empresa.ressarcimento.produtos.ProdutoService;
 import br.com.empresa.ressarcimento.produtos.api.GerarPlanilhaAutomaticaRequest;
 import br.com.empresa.ressarcimento.produtos.api.ResultadoGeracaoPlanilhaAutomatica;
+import br.com.empresa.ressarcimento.produtos.api.ResultadoGeracaoXmlProdutos;
 import br.com.empresa.ressarcimento.produtos.automatizado.ProdutoPlanilhaAutomaticaService;
 import br.com.empresa.ressarcimento.shared.api.ResultadoImportacaoDTO;
 import jakarta.xml.bind.JAXBException;
@@ -48,6 +49,18 @@ public class ProcessamentoRessarcimentoService {
     }
 
     @Transactional
+    public void marcarConcluidoComAvisos(Long processamentoRessarcimentoId, String mensagem) {
+        ProcessamentoRessarcimento p = processamentoRepository
+                .findById(processamentoRessarcimentoId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Processamento de ressarcimento não encontrado: " + processamentoRessarcimentoId));
+        p.setDataHoraFim(LocalDateTime.now());
+        p.setStatusExecucao(ProcessamentoRessarcimento.STATUS_CONCLUIDO_COM_AVISOS);
+        p.setMensagemErro(truncarMensagem(mensagem));
+        processamentoRepository.save(p);
+    }
+
+    @Transactional
     public void marcarErro(Long processamentoRessarcimentoId, String mensagem) {
         ProcessamentoRessarcimento p = processamentoRepository
                 .findById(processamentoRessarcimentoId)
@@ -84,12 +97,18 @@ public class ProcessamentoRessarcimentoService {
             }
             GerarPedidoAutomaticoResponse pedidoResp =
                     fluxoPedidoAutomaticoService.gerarAutomatico(ano, mes, pid);
-            Long arquivoProdutosId = produtoService.gerarXmlRetornandoIdArquivo(pid);
-            marcarConcluido(pid);
+            ResultadoGeracaoXmlProdutos xmlProd = produtoService.gerarXmlParcialParaPipeline(pid);
+            if (xmlProd.getCodigosSemMatriz().isEmpty()) {
+                marcarConcluido(pid);
+            } else {
+                marcarConcluidoComAvisos(pid, formatarAvisosProdutos(xmlProd.getCodigosSemMatriz()));
+            }
             return ResultadoPipelineProcessamento.builder()
                     .processamentoRessarcimentoId(pid)
                     .respostaPedidos(pedidoResp)
-                    .arquivoProdutosId(arquivoProdutosId)
+                    .arquivoProdutosId(xmlProd.getArquivoProdutosId())
+                    .codigosProdutosSemMatriz(xmlProd.getCodigosSemMatriz())
+                    .planilhaXlsx(xlsx)
                     .build();
         } catch (Exception e) {
             marcarErro(pid, e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
@@ -107,11 +126,18 @@ public class ProcessamentoRessarcimentoService {
         return mensagem.substring(0, MENSAGEM_ERRO_MAX - 3) + "...";
     }
 
+    private static String formatarAvisosProdutos(java.util.List<String> codigosSemMatriz) {
+        return "Códigos em item_nota_saida sem produto correspondente na matriz (não incluídos no XML): "
+                + String.join(", ", codigosSemMatriz);
+    }
+
     @Getter
     @Builder
     public static class ResultadoPipelineProcessamento {
         private final Long processamentoRessarcimentoId;
         private final GerarPedidoAutomaticoResponse respostaPedidos;
         private final Long arquivoProdutosId;
+        private final java.util.List<String> codigosProdutosSemMatriz;
+        private final byte[] planilhaXlsx;
     }
 }

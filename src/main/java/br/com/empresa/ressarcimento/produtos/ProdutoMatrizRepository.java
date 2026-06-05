@@ -30,4 +30,6 @@ public interface ProdutoMatrizRepository extends JpaRepository<ProdutoMatriz, Lo
     Optional<ProdutoMatriz> findFirstByCodInternoProduto(String codInternoProduto);
 
     List<ProdutoMatriz> findByCodProdFornecedor(String codProdFornecedor);
+
+    List<ProdutoMatriz> findByCnpjFornecedorAndCodProdFornecedor(String cnpjFornecedor, String codProdFornecedor);
 }
